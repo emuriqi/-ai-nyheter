@@ -6,6 +6,8 @@
  * - Tidsavbrudd og maks størrelse på svaret.
  * - Omdirigeringer følges bare innenfor tillatte verter, så en kilde ikke kan
  *   sende innhentingen videre til vilkårlige adresser.
+ * - Hver adresse, også målet for en omdirigering, kan sjekkes mot robots.txt
+ *   og TDM-regler før den hentes (`checkUrl`).
  */
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -18,6 +20,11 @@ export type HttpOptions = {
   /** Verter omdirigeringer kan gå til. Standard: bare verten i URL-en. */
   allowedHosts?: string[];
   headers?: Record<string, string>;
+  /**
+   * Kalles før hver forespørsel, også for omdirigeringer. Returnerer en
+   * begrunnelse når adressen ikke kan hentes, ellers null.
+   */
+  checkUrl?: (url: URL) => string | null;
 };
 
 export type HttpResult = {
@@ -38,6 +45,17 @@ export class FetchError extends Error {
   }
 }
 
+/** Adressen kan ikke hentes etter robots.txt eller TDM-reglene. */
+export class AccessDeniedError extends FetchError {
+  constructor(
+    message: string,
+    readonly url: string,
+  ) {
+    super(message);
+    this.name = "AccessDeniedError";
+  }
+}
+
 const MAX_REDIRECTS = 3;
 
 export async function politeFetch(url: string, options: HttpOptions): Promise<HttpResult> {
@@ -46,6 +64,10 @@ export async function politeFetch(url: string, options: HttpOptions): Promise<Ht
   const allowedHosts = new Set(options.allowedHosts ?? [current.host]);
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
+    const denied = options.checkUrl?.(current);
+    if (denied) {
+      throw new AccessDeniedError(denied, current.toString());
+    }
     let response: Response;
     try {
       response = await fetchImpl(current.toString(), {
@@ -139,12 +161,16 @@ function discard(body: ReadableStream<Uint8Array> | null): void {
   body?.cancel().catch(() => undefined);
 }
 
-/** Dekoder med tegnsettet fra Content-Type eller XML-deklarasjonen, ellers UTF-8. */
+/**
+ * Dekoder med tegnsettet fra Content-Type, XML-deklarasjonen eller en
+ * <meta charset> i starten av en HTML-side, ellers UTF-8.
+ */
 function decode(bytes: Uint8Array, contentType: string | null): string {
   const fromHeader = /charset=["']?([\w-]+)/i.exec(contentType ?? "")?.[1];
-  const head = new TextDecoder("ascii").decode(bytes.subarray(0, 200));
+  const head = new TextDecoder("ascii").decode(bytes.subarray(0, 1024));
   const fromXml = /^\s*<\?xml[^>]*encoding=["']([\w-]+)["']/i.exec(head)?.[1];
-  const charset = fromHeader ?? fromXml ?? "utf-8";
+  const fromMeta = /<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(head)?.[1];
+  const charset = fromHeader ?? fromXml ?? fromMeta ?? "utf-8";
   try {
     return new TextDecoder(charset).decode(bytes);
   } catch {

@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import { htmlToText } from "./text";
+import { htmlToText, normalizeWhitespace } from "./text";
 
 /** Ett element fra en kilde, normalisert på tvers av formater. All tekst er ren tekst. */
 export type FeedItem = {
@@ -27,12 +27,18 @@ const parser = new XMLParser({
   parseTagValue: false,
   trimValues: true,
   isArray: (name) => name === "item" || name === "entry" || name === "link",
+  // Atom-tekst kan inneholde XHTML med blandet innhold. Råteksten beholdes, så
+  // rekkefølgen på ordene ikke går tapt, og tolkes etter type i atomText().
+  stopNodes: ["feed.entry.title", "feed.entry.summary", "feed.entry.content"],
 });
 
 /** Leser RSS 2.0, RSS 1.0 (RDF) og Atom. */
 export function parseFeed(xml: string, feedUrl: string): FeedItem[] {
   // Egendefinerte entiteter brukes i angrep som «billion laughs» og trengs aldri i feeder.
-  if (/<!ENTITY/i.test(xml)) {
+  // De kan bare deklareres i DOCTYPE før rotelementet, så bare den delen sjekkes.
+  const rootStart = xml.search(/<(rss|rdf:RDF|feed)[\s>]/);
+  const prolog = rootStart >= 0 ? xml.slice(0, rootStart) : xml;
+  if (/<!ENTITY/i.test(prolog)) {
     throw new FeedParseError("Feeden inneholder ENTITY-deklarasjoner og avvises");
   }
   let doc: Record<string, unknown>;
@@ -60,10 +66,14 @@ export function parseFeed(xml: string, feedUrl: string): FeedItem[] {
 }
 
 function normalizeRss(entry: unknown, feedUrl: string): FeedItem | null {
-  const url = resolveUrl(text(get(entry, "link")), feedUrl);
+  const guidValue = decodeCharRefs(text(get(entry, "guid")));
+  // I RSS 2.0 er <link> valgfri. Da er guid lenken, med mindre isPermaLink="false".
+  const guidIsLink = text(get(entry, "guid", "@_isPermaLink")) !== "false" && /^https?:\/\//i.test(guidValue);
+  const url =
+    resolveUrl(decodeCharRefs(text(get(entry, "link"))), feedUrl) ?? (guidIsLink ? resolveUrl(guidValue, feedUrl) : null);
   const title = htmlToText(text(get(entry, "title")));
   if (!url || !title) return null;
-  const guid = text(get(entry, "guid")) || text(get(entry, "@_rdf:about")) || url;
+  const guid = guidValue || decodeCharRefs(text(get(entry, "@_rdf:about"))) || url;
   const published = text(get(entry, "pubDate")) || text(get(entry, "dc:date"));
   return {
     guid,
@@ -82,23 +92,69 @@ function normalizeAtom(entry: unknown, feedUrl: string): FeedItem | null {
       const rel = text(get(link, "@_rel"));
       return rel === "" || rel === "alternate";
     }) ?? links[0];
-  const url = resolveUrl(text(get(alternate, "@_href")), feedUrl);
-  const title = htmlToText(text(get(entry, "title")));
+  const url = resolveUrl(decodeCharRefs(text(get(alternate, "@_href"))), feedUrl);
+  const title = atomText(get(entry, "title"));
   if (!url || !title) return null;
   return {
-    guid: text(get(entry, "id")) || url,
+    guid: decodeCharRefs(text(get(entry, "id"))) || url,
     url,
     title,
     publishedAt: parseDate(text(get(entry, "published")) || text(get(entry, "updated"))),
-    summary: nonEmpty(htmlToText(text(get(entry, "summary")))),
-    content: nonEmpty(htmlToText(text(get(entry, "content")))),
+    summary: nonEmpty(atomText(get(entry, "summary"))),
+    content: nonEmpty(atomText(get(entry, "content"))),
   };
+}
+
+/**
+ * Atom-tekst, som parseren gir som rå XML: type="xhtml" er innebygde
+ * elementer, "html" er escapet HTML, og "text" (standard) er ren tekst.
+ */
+function atomText(value: unknown): string {
+  const type = text(get(value, "@_type"));
+  const raw = text(value);
+  if (type === "xhtml") return htmlToText(raw);
+  if (type === "html") return htmlToText(decodeXml(raw));
+  return normalizeWhitespace(decodeXml(raw));
+}
+
+/** Dekoder XML-entiteter og pakker ut CDATA i rå XML-tekst. */
+function decodeXml(raw: string): string {
+  let out = "";
+  let position = 0;
+  for (;;) {
+    const start = raw.indexOf("<![CDATA[", position);
+    if (start < 0) return out + decodeEntities(raw.slice(position));
+    out += decodeEntities(raw.slice(position, start));
+    const end = raw.indexOf("]]>", start + 9);
+    if (end < 0) return out + raw.slice(start + 9);
+    out += raw.slice(start + 9, end);
+    position = end + 3;
+  }
+}
+
+const XML_ENTITIES: Record<string, string> = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'" };
+
+function decodeEntities(value: string): string {
+  return decodeCharRefs(value).replace(/&(lt|gt|amp|quot|apos);/g, (_match, name: string) => XML_ENTITIES[name]);
+}
+
+/**
+ * Dekoder numeriske tegnreferanser (&#038; og &#x26;) som XML-parseren lar
+ * stå i lenker og id-er. Tekstfelter dekodes senere av htmlToText.
+ */
+function decodeCharRefs(value: string): string {
+  return value.replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (match, code: string) => {
+    const point = code[0].toLowerCase() === "x" ? parseInt(code.slice(1), 16) : parseInt(code, 10);
+    return Number.isFinite(point) && point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : match;
+  });
 }
 
 /** Dato fra RFC 822 (RSS) eller ISO 8601 (Atom). Ugyldige datoer blir null. */
 export function parseDate(value: string | null | undefined): Date | null {
   if (!value) return null;
-  const time = Date.parse(value);
+  // Norske kilder bruker ofte CET/CEST, som Date.parse ikke kjenner.
+  const normalized = value.replace(/\bCEST\b/, "+0200").replace(/\bCET\b/, "+0100");
+  const time = Date.parse(normalized);
   return Number.isNaN(time) ? null : new Date(time);
 }
 

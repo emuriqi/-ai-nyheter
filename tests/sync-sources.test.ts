@@ -72,6 +72,24 @@ describe("syncSourcesFromConfig", () => {
     });
   });
 
+  it("nullstiller ETag, Last-Modified og siste forsøk når feed-adressen endres", async () => {
+    await syncSourcesFromConfig(db, sources(activeSource({ slug: "a" })));
+    await db.source.update({
+      where: { slug: "a" },
+      data: { etag: '"v1"', lastModified: "Mon, 12 Oct 2026 09:00:00 GMT", lastAttemptAt: new Date() },
+    });
+
+    await syncSourcesFromConfig(db, sources(activeSource({ slug: "a" })));
+    expect(await db.source.findUniqueOrThrow({ where: { slug: "a" } })).toMatchObject({ etag: '"v1"' });
+
+    await syncSourcesFromConfig(db, sources(activeSource({ slug: "a", feedUrl: "https://example.no/ny-feed" })));
+    expect(await db.source.findUniqueOrThrow({ where: { slug: "a" } })).toMatchObject({
+      etag: null,
+      lastModified: null,
+      lastAttemptAt: null,
+    });
+  });
+
   it("setter kilder som er fjernet fra konfigurasjonen på pause i stedet for å slette dem", async () => {
     await syncSourcesFromConfig(db, sources(activeSource({ slug: "a" }), activeSource({ slug: "b" })));
 

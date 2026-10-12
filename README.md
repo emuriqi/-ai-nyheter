@@ -49,7 +49,9 @@ npm run dev                # http://localhost:3000
 Kjør innhentingen med `npm run ingest`, med knappen «Kjør innhenting nå» i admin, eller fra en cron-jobb:
 
 ```bash
-# CRON_SECRET settes i .env (tilfeldig, minst 24 tegn)
+# CRON_SECRET settes i .env (tilfeldig, minst 24 tegn). Serveren leser .env ved oppstart,
+# men skallet ditt gjør ikke det, så hent verdien inn først:
+CRON_SECRET=$(grep '^CRON_SECRET=' .env | cut -d= -f2- | tr -d '"')
 curl -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/ingest
 ```
 
@@ -81,23 +83,27 @@ datalaget (`src/lib/admin.ts`), siden en sjekk i layouten ikke hindrer at sidens
 1. **Synkroniser kildene** fra `config/site.config.ts` til databasen.
 2. **Hent fra hver aktiv kilde.** Bare kilder med status `ACTIVE` hentes, og skjemaet krever åpen lisens og leste
    vilkår for det. For hver kilde:
-   - **robots.txt** leses etter RFC 9309. Kan den ikke leses (5xx eller nettverksfeil), hentes ingenting.
-   - **Reservasjon mot tekst- og datautvinning** sjekkes på tre måter: `/.well-known/tdmrep.json` (TDMRep),
-     headeren `tdm-reservation: 1`, og om robots.txt sperrer kjente KI-crawlere (`aiCrawlerTokens`). Ved
-     reservasjon hoppes kilden over, og funnet vises i admin.
+   - **robots.txt** leses etter RFC 9309. Kan den ikke leses (5xx, 429 eller nettverksfeil), hentes ingenting.
+   - **Reservasjon mot tekst- og datautvinning** sjekkes på tre måter: `/.well-known/tdmrep.json` (TDMRep, første
+     regel som matcher gjelder), headeren `tdm-reservation: 1`, og om robots.txt sperrer kjente KI-crawlere
+     (`aiCrawlerTokens`). Reserverer kilden feeden, hoppes kilden over. Reserverer den enkeltartikler, lagres bare
+     tittel og lenke for dem. Funnene vises i admin.
    - **Feeden hentes høflig**: identifiserende User-Agent med kontaktadresse, betingede forespørsler
      (`If-None-Match` / `If-Modified-Since`), minste intervall mellom hentinger, tidsavbrudd, maks størrelse og
-     omdirigeringer bare innenfor samme vert.
+     omdirigeringer bare innenfor samme vert. Hvert mål for en omdirigering sjekkes også mot robots.txt og TDM.
    - **Feeden leses** som RSS 2.0, RSS 1.0 eller Atom, eller med en egen adapter for Stortingets API. HTML gjøres om
      til ren tekst, og bilder og skript fjernes.
    - **Lagring**: nye elementer får slettedato. Uendrede elementer røres ikke, så slettefristen ikke forlenges.
-     Endret innhold lagres på nytt. Elementer eldre enn `maxItemAgeDays` hentes ikke, og teksten kuttes etter
-     `maxExcerptChars` og `maxTextChars`.
-   - **Fulltekst** hentes bare for kilder med `allowFullTextFetch` (krever åpen lisens), bare fra kildens egne verter,
-     og bare når robots.txt og TDM-reglene tillater det. Hovedteksten hentes ut med Mozillas Readability.
+     Endret innhold lagres på nytt. Elementer eldre enn `maxItemAgeDays` hentes ikke, bare de `maxItemsPerSource`
+     nyeste elementene behandles, og teksten kuttes etter `maxExcerptChars` og `maxTextChars`.
+   - **Fulltekst fra artikkelsiden** er avslått for alle kilder. Det kan slås på per kilde med `allowFullTextFetch`
+     (krever åpen lisens), og hentes da bare fra kildens egne verter og bare når robots.txt og TDM-reglene
+     tillater det. Hovedteksten hentes ut med Mozillas Readability.
 3. **Slett utløpt kildetekst** og gamle jobblogger.
 
-Hver kjøring logges som en `JobRun` med resultat per kilde, og to kjøringer kan ikke gå samtidig.
+Hver kjøring logges som en `JobRun` med resultat per kilde. To kjøringer i samme prosess kan ikke gå samtidig, og på
+tvers av prosesser (f.eks. `npm run ingest` mens serveren kjører) reserveres hver kilde atomisk i databasen, så samme
+kilde ikke hentes to ganger innenfor minste intervall.
 
 ### Mappestruktur
 
@@ -173,8 +179,11 @@ aldri mot nettet: innhentingen testes med en falsk `fetch` og syntetiske eksempe
 - sletting av kildetekst, inkludert at tittel og URL beholdes og at en kortere sletteperiode også gjelder lagret tekst
 - synkronisering av kilder fra konfigurasjonen
 - innhenting: RSS 2.0, RSS 1.0, Atom og Stortinget-adapteren, robots.txt og TDM-reservasjoner (fil, header, meta og
-  KI-crawlere), omdirigeringer, størrelsesgrense, tegnsett, tidsavbrudd, betingede forespørsler, minste intervall,
-  duplikater og endringer, fulltekst bare fra kildens egne verter, og lås mot samtidige kjøringer
+  KI-crawlere, også for enkeltartikler og ved omdirigeringer), at ingenting hentes når reglene ikke kan leses,
+  størrelsesgrense, tegnsett, tidsavbrudd, betingede forespørsler, minste intervall, duplikater og endringer,
+  fulltekst bare fra kildens egne verter, feil i én kilde som ikke stopper de andre, og samtidige kjøringer
+- hele pipelinen mot en ekte database: synkronisering, innhenting, sletting av utløpt tekst og oppsummeringen
+- knappen «Kjør innhenting nå» (tilgangssjekk i server action)
 - cron-ruten og Bearer-tokenet
 - tilgangskontroll for admin: hvilke ruter proxyen dekker, svarene den gir, krav til passord og at datalaget
   avviser forespørsler uten gyldig innlogging før databasen leses

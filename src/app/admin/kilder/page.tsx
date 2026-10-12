@@ -67,7 +67,13 @@ async function SourceList() {
                   term="TDM-sjekk"
                   value={
                     source.tdmCheckedAt
-                      ? `${source.tdmReservationFound ? "Reservasjon funnet" : "Ingen reservasjon"} (${formatDateTime(source.tdmCheckedAt)})`
+                      ? `${
+                          source.tdmReservationFound === null
+                            ? "Ukjent (kunne ikke leses)"
+                            : source.tdmReservationFound
+                              ? "Reservasjon funnet"
+                              : "Ingen reservasjon"
+                        } (${formatDateTime(source.tdmCheckedAt)})`
                       : "Ikke sjekket"
                   }
                 />

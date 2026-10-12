@@ -17,10 +17,11 @@ Dokumentet utvides i hver fase. Det er ikke juridisk rådgivning.
 | Kildenes bilder vises aldri (`showSourceImages: false` kan ikke endres)                    | `schema.ts`                  | ✅     |
 | Kildetekst slettes etter `retention.sourceTextDays` (30 dager). Tittel og URL beholdes for kildelisten | `retention.ts`   | ✅     |
 | En kortere sletteperiode gjelder også tekst som allerede er lagret                         | `retention.ts`               | ✅     |
-| robots.txt (RFC 9309) sjekkes før hver henting. Kan den ikke leses, hentes ingenting       | `ingest/access.ts`           | ✅     |
-| TDM-reservasjoner sjekkes før hver henting: tdmrep.json, `tdm-reservation`-header og -meta, og sperre for KI-crawlere i robots.txt | `ingest/access.ts` | ✅ |
+| robots.txt (RFC 9309) sjekkes før hver henting, også for mål for omdirigeringer. Kan den ikke leses (5xx, 429, nettverksfeil), hentes ingenting | `ingest/access.ts` | ✅ |
+| TDM-reservasjoner sjekkes før hver henting: tdmrep.json, `tdm-reservation`-header og -meta, og sperre for KI-crawlere i robots.txt. tdmrep.json hentes bare når robots.txt tillater det | `ingest/access.ts` | ✅ |
+| Reserverer kilden enkeltartikler, lagres bare tittel og lenke for dem, ikke tekst. Kommer reservasjonen senere, fjernes teksten ved neste henting | `ingest/run.ts` | ✅ |
 | Bare tekst lagres. HTML, bilder og skript fjernes, og teksten kuttes etter `maxExcerptChars` og `maxTextChars` | `ingest/text.ts` | ✅ |
-| Lenkede artikkelsider hentes bare fra kildens egne verter, og bare når robots.txt og TDM tillater det | `ingest/run.ts` | ✅ |
+| Henting av lenkede artikkelsider er avslått for alle kilder. Slås det på, hentes de bare fra kildens egne verter og bare når robots.txt og TDM tillater det | `config/site.config.ts`, `ingest/run.ts` | ✅ |
 | Høflig henting: User-Agent med kontaktadresse, betingede forespørsler, minste intervall og størrelsesgrense | `ingest/http.ts` | ✅ |
 | Korte, merkede og krediterte sitater (`maxQuoteWords`), ellers egne formuleringer          | Generering og moderasjon     | Fase 4 |
 | Side der rettighetshavere kan be om fjerning                                               | Kontakt / fjerning           | Fase 7 |
@@ -31,6 +32,9 @@ så lenge innholdet er uendret.
 
 Kildene er åpent lisensiert, så lisensen gir uansett rett til gjenbruk. Vi respekterer likevel reservasjoner mot
 tekst- og datautvinning, og tolker en sperre for kjente KI-crawlere i robots.txt som en slik reservasjon.
+
+Innhentingen bruker bare det kildene selv publiserer i RSS-feeder og åpne API-er. Å hente og tolke de lenkede
+artikkelsidene (`allowFullTextFetch`) kan regnes som skraping, og er derfor slått av til det er avklart.
 
 ## Merking av AI-innhold (EUs AI-forordning art. 50)
 

@@ -6,23 +6,39 @@ import { FeedParseError, type FeedItem } from "./feed";
  *
  * Formatet er skrevet etter Stortingets dokumentasjon og ikke kontrollert mot
  * et ekte svar ennå (utviklingsmiljøet hadde ikke tilgang). Skjemaet er derfor
- * romslig, og ukjente felter ignoreres. Mangler `saker_liste`, feiler
- * innhentingen med en tydelig melding i stedet for å lagre noe feil.
+ * romslig: bare id og tittel er påkrevd, og beskrivende felter godtas både
+ * som tekst og tall (f.eks. statuskoder). Mangler `saker_liste`, eller kan
+ * ingen saker leses, feiler innhentingen med en tydelig melding i stedet for
+ * å rapportere at alt gikk bra.
  */
 
-const nameSchema = z.object({ navn: z.string().nullish() }).nullish();
+/** Tekst eller tall, gjort om til tekst. Alt annet blir null. */
+const loose = z
+  .unknown()
+  .optional()
+  .transform((value) => (typeof value === "string" || typeof value === "number" ? String(value) : null));
+
+const nameSchema = z
+  .unknown()
+  .optional()
+  .transform((value) =>
+    typeof value === "object" && value !== null ? loose.parse((value as { navn?: unknown }).navn) : null,
+  );
 
 const sakSchema = z.object({
-  id: z.union([z.number(), z.string()]),
-  tittel: z.string().nullish(),
-  korttittel: z.string().nullish(),
-  sist_oppdatert_dato: z.string().nullish(),
-  status: z.string().nullish(),
-  type: z.string().nullish(),
-  dokumentgruppe: z.string().nullish(),
-  henvisning: z.string().nullish(),
+  id: z.union([z.number(), z.string().min(1)]),
+  tittel: loose,
+  korttittel: loose,
+  sist_oppdatert_dato: loose,
+  status: loose,
+  type: loose,
+  dokumentgruppe: loose,
+  henvisning: loose,
   komite: nameSchema,
-  emne_liste: z.array(nameSchema).nullish(),
+  emne_liste: z
+    .unknown()
+    .optional()
+    .transform((value) => (Array.isArray(value) ? value.map((emne) => nameSchema.parse(emne)) : [])),
 });
 
 export const STORTINGET_SAK_URL = "https://www.stortinget.no/no/Saker-og-publikasjoner/Saker/Sak/?p=";
@@ -39,7 +55,7 @@ export function parseStortingetSaker(body: string): FeedItem[] {
     throw new FeedParseError("Uventet format fra Stortinget: mangler saker_liste");
   }
 
-  return list.flatMap((raw): FeedItem[] => {
+  const items = list.flatMap((raw): FeedItem[] => {
     const parsed = sakSchema.safeParse(raw);
     if (!parsed.success) return [];
     const sak = parsed.data;
@@ -48,13 +64,13 @@ export function parseStortingetSaker(body: string): FeedItem[] {
 
     const id = String(sak.id);
     const publishedAt = parseStortingetDate(sak.sist_oppdatert_dato);
-    const topics = (sak.emne_liste ?? []).map((emne) => emne?.navn).filter(Boolean);
+    const topics = sak.emne_liste.filter(Boolean);
     const facts = [
       sak.korttittel && sak.korttittel !== title ? `Korttittel: ${sak.korttittel}` : null,
       sak.status ? `Status: ${humanize(sak.status)}` : null,
       sak.type ? `Type: ${humanize(sak.type)}` : null,
       sak.dokumentgruppe ? `Dokumentgruppe: ${humanize(sak.dokumentgruppe)}` : null,
-      sak.komite?.navn ? `Komité: ${sak.komite.navn}` : null,
+      sak.komite ? `Komité: ${sak.komite}` : null,
       topics.length > 0 ? `Emner: ${topics.join(", ")}` : null,
       sak.henvisning ? `Henvisning: ${sak.henvisning}` : null,
     ].filter((line): line is string => line !== null);
@@ -70,6 +86,11 @@ export function parseStortingetSaker(body: string): FeedItem[] {
       },
     ];
   });
+
+  if (list.length > 0 && items.length === 0) {
+    throw new FeedParseError(`Uventet format fra Stortinget: ingen av ${list.length} saker kunne leses`);
+  }
+  return items;
 }
 
 /** Stortinget bruker Microsofts JSON-datoformat «/Date(1349647200000+0200)/», men vi godtar også ISO 8601. */

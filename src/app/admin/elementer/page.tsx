@@ -55,9 +55,11 @@ async function ItemList() {
               <td className="py-2 pr-4">{formatDateTime(item.publishedAt)}</td>
               <td className="py-2 pr-4">{formatDateTime(item.fetchedAt)}</td>
               <td className="py-2 pr-4">
-                {item.purgedAt
-                  ? "Slettet"
-                  : `${item.excerptLength + item.bodyLength} tegn${item.bodyLength > 0 ? " (med brødtekst)" : ""}`}
+                {item.tdmReserved
+                  ? "Ingen (reservert mot TDM)"
+                  : item.purgedAt
+                    ? "Slettet"
+                    : `${item.excerptLength + item.bodyLength} tegn${item.bodyLength > 0 ? " (med brødtekst)" : ""}`}
               </td>
               <td className="py-2">{item.purgedAt ? formatDate(item.purgedAt) : formatDate(item.deleteAfter)}</td>
             </tr>

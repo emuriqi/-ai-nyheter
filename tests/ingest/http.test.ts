@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FetchError, politeFetch } from "@/lib/ingest/http";
+import { AccessDeniedError, FetchError, politeFetch } from "@/lib/ingest/http";
 import { createFakeFetch } from "../helpers/fake-fetch";
 
 const base = { userAgent: "AI-nyheter/0.2 (+https://example.no/kontakt)", timeoutMs: 1000, maxBytes: 100 };
@@ -27,6 +27,35 @@ describe("politeFetch", () => {
     await expect(politeFetch("https://example.no/ut", { ...base, fetchImpl: fake.fetchImpl })).rejects.toThrow(
       "annen vert",
     );
+  });
+
+  it("følger ikke omdirigeringer til http, uten Location eller i for lange kjeder", async () => {
+    const fake = createFakeFetch({
+      "https://example.no/ned": new Response(null, { status: 301, headers: { location: "http://example.no/x" } }),
+      "https://example.no/tom": new Response(null, { status: 302 }),
+      "https://example.no/r1": new Response(null, { status: 302, headers: { location: "/r2" } }),
+      "https://example.no/r2": new Response(null, { status: 302, headers: { location: "/r3" } }),
+      "https://example.no/r3": new Response(null, { status: 302, headers: { location: "/r4" } }),
+      "https://example.no/r4": new Response(null, { status: 302, headers: { location: "/r5" } }),
+      "https://example.no/r5": new Response("for langt"),
+    });
+    const options = { ...base, fetchImpl: fake.fetchImpl };
+    await expect(politeFetch("https://example.no/ned", options)).rejects.toThrow("Bare https");
+    await expect(politeFetch("https://example.no/tom", options)).rejects.toThrow("uten Location");
+    await expect(politeFetch("https://example.no/r1", options)).rejects.toThrow("For mange omdirigeringer");
+    expect(fake.urls()).not.toContain("https://example.no/r5");
+  });
+
+  it("sjekker hver adresse, også målet for en omdirigering, før den hentes", async () => {
+    const fake = createFakeFetch({
+      "https://example.no/rss": new Response(null, { status: 301, headers: { location: "/privat/rss" } }),
+      "https://example.no/privat/rss": new Response("hemmelig"),
+    });
+    const checkUrl = (url: URL) => (url.pathname.startsWith("/privat/") ? "robots.txt sperrer /privat/" : null);
+    await expect(
+      politeFetch("https://example.no/rss", { ...base, fetchImpl: fake.fetchImpl, checkUrl }),
+    ).rejects.toThrow(AccessDeniedError);
+    expect(fake.urls()).toEqual(["https://example.no/rss"]);
   });
 
   it("stopper svar som er for store, også uten Content-Length", async () => {
@@ -61,6 +90,16 @@ describe("politeFetch", () => {
     });
     const result = await politeFetch("https://example.no/latin1", { ...base, fetchImpl: fake.fetchImpl });
     expect(result.body).toBe("båt");
+  });
+
+  it("leser tegnsett fra <meta charset> når headeren mangler det", async () => {
+    const page = `<html><head><meta charset="iso-8859-1"></head><body>syltet\xf8y</body></html>`;
+    const bytes = Uint8Array.from(page, (char) => char.charCodeAt(0));
+    const fake = createFakeFetch({
+      "https://example.no/side": new Response(bytes, { headers: { "content-type": "text/html" } }),
+    });
+    const result = await politeFetch("https://example.no/side", { ...base, maxBytes: 1000, fetchImpl: fake.fetchImpl });
+    expect(result.body).toContain("syltetøy");
   });
 
   it("gir tydelig feil ved tidsavbrudd", async () => {

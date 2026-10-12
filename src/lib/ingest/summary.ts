@@ -15,6 +15,7 @@ export function describeSource(result: SourceRunResult): string {
   if (result.created) parts.push(`${result.created} nye`);
   if (result.updated) parts.push(`${result.updated} endret`);
   if (result.fullTextFetched) parts.push(`${result.fullTextFetched} med fulltekst`);
+  if (result.reserved) parts.push(`${result.reserved} reservert mot TDM (bare tittel og lenke)`);
   if (result.tooOld) parts.push(`${result.tooOld} for gamle`);
   if (result.reason) parts.push(result.reason);
   return `${result.slug}: ${parts.join(", ")}`;

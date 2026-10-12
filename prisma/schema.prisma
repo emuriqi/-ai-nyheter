@@ -134,6 +134,9 @@ model SourceItem {
   excerpt     String?
   /// Teksten som brukes til generering og chat. Slettes etter deleteAfter.
   bodyText    String?
+  /// true når kilden har reservert elementet mot tekst- og datautvinning.
+  /// Da lagres bare tittel og lenke, aldri tekst.
+  tdmReserved Boolean   @default(false)
   /// Hash av teksten, brukes til å oppdage endringer. Beholdes etter sletting.
   contentHash String?
   language    String

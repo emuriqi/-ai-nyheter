@@ -70,7 +70,7 @@ export default defineSiteConfig({
   },
 
   ingestion: {
-    userAgent: "AI-nyheter/0.2 (+https://github.com/emuriqi/ai-nyheter)",
+    userAgent: "AI-nyheter/0.2 (+https://github.com/emuriqi/-ai-nyheter)",
     aiCrawlerTokens: ["ClaudeBot", "anthropic-ai", "GPTBot", "Google-Extended", "CCBot"],
     minIntervalMinutes: 30,
     maxItemsPerSource: 50,
@@ -126,7 +126,9 @@ export default defineSiteConfig({
       status: "NEEDS_VERIFICATION",
       termsReviewedAt: null,
       tdmReservation: "UNKNOWN",
-      allowFullTextFetch: true,
+      // Henting av lenkede artikkelsider er slått av til det er avklart at det
+      // ikke regnes som skraping. Feedens egen tekst brukes i stedet.
+      allowFullTextFetch: false,
       notes:
         "Lisensen er oppsummert fra websøk 12.10.2026, men ikke lest direkte på termsUrl. Feed-adressen for norsk er hentet fra en tredjepartsoversikt. SSB dokumenterer den engelske feeden https://www.ssb.no/en/rss/ og temafeeder under /rss/<tema>.",
     },

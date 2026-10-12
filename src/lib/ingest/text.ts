@@ -7,6 +7,9 @@ import { parseHTML } from "linkedom";
  * blokkelementer blir linjeskift. Bare teksten lagres, aldri HTML eller bilder.
  */
 export function htmlToText(html: string): string {
+  // Lagret tekst kuttes uansett til noen tusen tegn. Grensen hindrer at et
+  // enormt eller dypt nøstet felt gjør tolkningen treg.
+  html = html.slice(0, MAX_HTML_CHARS);
   if (!/[<&]/.test(html)) {
     return normalizeWhitespace(html);
   }
@@ -24,14 +27,29 @@ export function htmlToText(html: string): string {
  * som en artikkel.
  */
 export function extractArticleText(html: string, url: string): string | null {
+  if (html.length > MAX_HTML_CHARS) return null;
   const { document } = parseHTML(html);
   // Readability bruker dokumentets URL til å løse relative lenker.
   Object.defineProperty(document, "documentURI", { value: url });
-  const article = new Readability(document as unknown as Document, { charThreshold: 200 }).parse();
+  let article: ReturnType<Readability["parse"]>;
+  try {
+    // Grensen hindrer at en svært stor eller dypt nøstet side låser prosessen.
+    article = new Readability(document as unknown as Document, {
+      charThreshold: 200,
+      maxElemsToParse: MAX_ELEMENTS,
+    }).parse();
+  } catch {
+    return null;
+  }
   // Bruker HTML-en fra Readability (ikke textContent) for å beholde avsnittene.
   const text = article?.content ? htmlToText(article.content) : "";
   return text.length > 0 ? text : null;
 }
+
+/** Sider med flere elementer enn dette regnes ikke som artikler. */
+const MAX_ELEMENTS = 10_000;
+/** Lengste HTML som tolkes, for ett felt eller én artikkelside. */
+export const MAX_HTML_CHARS = 1_000_000;
 
 /** Slår sammen mellomrom og tomme linjer. */
 export function normalizeWhitespace(text: string): string {

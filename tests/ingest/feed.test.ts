@@ -49,6 +49,58 @@ describe("parseFeed: Atom og RDF", () => {
   });
 });
 
+describe("parseFeed: kanttilfeller", () => {
+  const rss = (items: string) =>
+    `<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>${items}</channel></rss>`;
+
+  it("dekoder numeriske tegnreferanser i lenker", () => {
+    const [item] = parseFeed(rss("<item><title>A</title><link>https://example.no/?p=1&#038;lang=nb</link></item>"), "https://example.no/");
+    expect(item.url).toBe("https://example.no/?p=1&lang=nb");
+  });
+
+  it("bruker guid som lenke når <link> mangler, men ikke når isPermaLink er false", () => {
+    const items = parseFeed(
+      rss(
+        '<item><title>A</title><guid>https://example.no/sak/9</guid></item>' +
+          '<item><title>B</title><guid isPermaLink="false">https://example.no/sak/10</guid></item>',
+      ),
+      "https://example.no/",
+    );
+    expect(items.map((item) => item.url)).toEqual(["https://example.no/sak/9"]);
+  });
+
+  it("leser Atom-titler med type xhtml og lar ren tekst være", () => {
+    const atom = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+      <entry><title type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">Tittel <b>med</b> uthevet</div></title>
+        <link href="https://example.no/1"/><id>1</id></entry>
+      <entry><title type="text">Renten &lt;b&gt; er 5 &lt; 6</title><link href="https://example.no/2"/><id>2</id></entry>
+    </feed>`;
+    const [xhtml, plain] = parseFeed(atom, "https://example.no/");
+    expect(xhtml.title).toBe("Tittel med uthevet");
+    expect(plain.title).toBe("Renten <b> er 5 < 6");
+  });
+
+  it("avviser ikke feeden når «<!ENTITY» står som tekst i et element", () => {
+    const items = parseFeed(
+      rss("<item><title>XML</title><link>https://example.no/1</link><description><![CDATA[Om <!ENTITY i XML]]></description></item>"),
+      "https://example.no/",
+    );
+    expect(items.map((item) => item.title)).toEqual(["XML"]);
+  });
+
+  it("forstår norske tidssoner (CET og CEST)", () => {
+    const items = parseFeed(
+      rss(
+        "<item><title>A</title><link>https://example.no/1</link><pubDate>Mon, 12 Oct 2026 08:00:00 CEST</pubDate></item>" +
+          "<item><title>B</title><link>https://example.no/2</link><pubDate>Mon, 12 Jan 2026 08:00:00 CET</pubDate></item>",
+      ),
+      "https://example.no/",
+    );
+    expect(items[0].publishedAt?.toISOString()).toBe("2026-10-12T06:00:00.000Z");
+    expect(items[1].publishedAt?.toISOString()).toBe("2026-01-12T07:00:00.000Z");
+  });
+});
+
 describe("parseFeed: ugyldige feeder", () => {
   it("avviser ENTITY-deklarasjoner", () => {
     const evil = `<?xml version="1.0"?><!DOCTYPE r [<!ENTITY a "aaaa">]><rss><channel><item><title>&a;</title></item></channel></rss>`;
@@ -89,6 +141,22 @@ describe("Stortinget-adapteren", () => {
     expect(parseStortingetDate("/Date(-23508000000+0200)/")?.getUTCFullYear()).toBe(1969);
     expect(items[1].publishedAt).not.toBeNull();
     expect(parseStortingetDate("tull")).toBeNull();
+  });
+
+  it("godtar tall i beskrivende felter, f.eks. statuskoder", () => {
+    const [sak] = parseStortingetSaker(
+      JSON.stringify({
+        saker_liste: [{ id: 1, tittel: "Sak med koder", status: 2, type: 1, komite: { navn: 7 }, emne_liste: [{ navn: 3 }] }],
+      }),
+    );
+    expect(sak.summary).toBe("Status: 2\nType: 1\nKomité: 7\nEmner: 3");
+  });
+
+  it("feiler tydelig når ingen saker kan leses", () => {
+    expect(() => parseStortingetSaker(JSON.stringify({ saker_liste: [{ tittel: "uten id" }, { id: 2 }] }))).toThrow(
+      "ingen av 2 saker kunne leses",
+    );
+    expect(parseStortingetSaker(JSON.stringify({ saker_liste: [] }))).toEqual([]);
   });
 
   it("feiler tydelig når formatet er uventet", () => {

@@ -2,10 +2,10 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { SiteConfig, SourceConfig } from "../config/schema";
 import type { Db } from "../db";
 import { computeDeleteAfter, DAY_MS, failStaleJobRuns, STALE_JOB_MS } from "../retention";
-import { checkAccess, loadHostPolicy, tdmReservedByHeaderOrMeta, type HostPolicy } from "./access";
+import { checkAccess, evaluateAccess, loadHostPolicy, tdmReservedByHeaderOrMeta, type HostPolicy } from "./access";
 import { ADAPTERS } from "./adapters";
 import type { FeedItem } from "./feed";
-import { politeFetch, type FetchLike, type HttpOptions } from "./http";
+import { AccessDeniedError, politeFetch, type FetchLike, type HttpOptions } from "./http";
 import { contentHash, extractArticleText, truncate } from "./text";
 
 export type SourceOutcome = "fetched" | "not-modified" | "skipped" | "blocked" | "failed";
@@ -18,6 +18,8 @@ export type SourceRunResult = {
   updated: number;
   unchanged: number;
   tooOld: number;
+  /** Elementer kilden har reservert mot tekst- og datautvinning. Bare tittel og lenke er lagret. */
+  reserved: number;
   fullTextFetched: number;
 };
 
@@ -32,14 +34,36 @@ export type IngestOptions = {
   fetchImpl?: FetchLike;
 };
 
+// Delt på tvers av modulinstanser i samme prosess (route handlers og server
+// actions kan ligge i hver sin bunt), så cron og admin-knappen ikke kjører samtidig.
+const processLock = globalThis as unknown as { __aiNyheterIngestRunning?: boolean };
+
 /**
  * Henter nye elementer fra alle aktive kilder og lagrer dem.
  *
  * Bare kilder som er ACTIVE i config/site.config.ts hentes. For hver kilde
- * sjekkes robots.txt og TDM-reservasjoner først, og bare tekst lagres (aldri
- * bilder eller HTML), avkortet etter konfigurasjonen og med slettedato.
+ * sjekkes robots.txt og TDM-reservasjoner først, også ved omdirigeringer, og
+ * bare tekst lagres (aldri bilder eller HTML), avkortet etter konfigurasjonen
+ * og med slettedato.
+ *
+ * To kjøringer i samme prosess kan ikke gå samtidig. På tvers av prosesser
+ * (f.eks. `npm run ingest` mens serveren kjører) reserveres hver kilde
+ * atomisk i databasen, så samme kilde aldri hentes to ganger innenfor
+ * minste intervall.
  */
 export async function runIngestJob(db: Db, options: IngestOptions): Promise<IngestResult> {
+  if (processLock.__aiNyheterIngestRunning) {
+    return { status: "skipped", reason: "En innhenting kjører allerede" };
+  }
+  processLock.__aiNyheterIngestRunning = true;
+  try {
+    return await runLocked(db, options);
+  } finally {
+    processLock.__aiNyheterIngestRunning = false;
+  }
+}
+
+async function runLocked(db: Db, options: IngestOptions): Promise<IngestResult> {
   const now = options.now ?? new Date();
   await failStaleJobRuns(db, now);
 
@@ -89,6 +113,24 @@ export function totals(sources: SourceRunResult[]) {
   );
 }
 
+/**
+ * Reserverer en kilde for henting i én atomisk operasjon. Returnerer false
+ * hvis kilden ble forsøkt hentet for nylig (også av en annen prosess).
+ */
+export async function claimSource(db: Db, sourceId: string, now: Date, minIntervalMs: number): Promise<boolean> {
+  const { count } = await db.source.updateMany({
+    where: {
+      id: sourceId,
+      status: "ACTIVE",
+      OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lte: new Date(now.getTime() - minIntervalMs) } }],
+    },
+    data: { lastAttemptAt: now },
+  });
+  return count === 1;
+}
+
+type StoreOutcome = { status: "created" | "updated" | "unchanged"; fullText: boolean; reserved: boolean };
+
 class IngestContext {
   private readonly policies = new Map<string, Promise<HostPolicy>>();
   private readonly http: HttpOptions;
@@ -115,6 +157,7 @@ class IngestContext {
       updated: 0,
       unchanged: 0,
       tooOld: 0,
+      reserved: 0,
       fullTextFetched: 0,
     };
     const row = await this.db.source.findUnique({ where: { slug: source.slug } });
@@ -123,29 +166,31 @@ class IngestContext {
     }
 
     const { ingestion } = this.options.config;
-    const minInterval = ingestion.minIntervalMinutes * 60_000;
-    if (row.lastAttemptAt && this.now.getTime() - row.lastAttemptAt.getTime() < minInterval) {
+    if (!(await claimSource(this.db, row.id, this.now, ingestion.minIntervalMinutes * 60_000))) {
       return {
         ...result,
         outcome: "skipped",
         reason: `Hentet for under ${ingestion.minIntervalMinutes} minutter siden`,
       };
     }
-    await this.db.source.update({ where: { id: row.id }, data: { lastAttemptAt: this.now } });
 
     try {
       const feedUrl = new URL(source.feedUrl);
       const policy = await this.policyFor(feedUrl.origin);
-      const access = checkAccess(policy, feedUrl.toString(), ingestion);
+      const report = evaluateAccess(policy, feedUrl.toString(), ingestion);
       await this.db.source.update({
         where: { id: row.id },
         data: {
           robotsCheckedAt: this.now,
-          robotsAllowed: !(access.ok === false && access.kind === "robots"),
-          tdmCheckedAt: this.now,
-          tdmReservationFound: access.ok === false && access.kind === "tdm",
+          robotsAllowed: report.robots.ok,
+          // TDM-feltene endres bare når TDM faktisk ble vurdert. null betyr «ukjent».
+          ...(report.tdm && {
+            tdmCheckedAt: this.now,
+            tdmReservationFound: report.tdm.ok ? false : report.tdm.unknown ? null : true,
+          }),
         },
       });
+      const access = report.robots.ok && report.tdm ? report.tdm : report.robots;
       if (!access.ok) {
         await this.fail(row.id, access.reason);
         return { ...result, outcome: "blocked", reason: access.reason };
@@ -158,8 +203,19 @@ class IngestContext {
       const response = await politeFetch(feedUrl.toString(), {
         ...this.http,
         headers: { Accept: adapter.accept, ...conditional },
+        checkUrl: this.guard(policy),
       });
 
+      if (tdmReservedByHeaderOrMeta(response.headers)) {
+        const reason = "Feeden har «tdm-reservation: 1» i HTTP-headeren";
+        // Fjerner validatorene, så neste henting ikke får 304 og overser reservasjonen.
+        await this.db.source.update({
+          where: { id: row.id },
+          data: { tdmReservationFound: true, tdmCheckedAt: this.now, etag: null, lastModified: null },
+        });
+        await this.fail(row.id, reason);
+        return { ...result, outcome: "blocked", reason };
+      }
       if (response.status === 304) {
         await this.succeed(row.id, row.etag, row.lastModified);
         return { ...result, outcome: "not-modified" };
@@ -169,14 +225,9 @@ class IngestContext {
         await this.fail(row.id, reason);
         return { ...result, outcome: "failed", reason };
       }
-      if (tdmReservedByHeaderOrMeta(response.headers)) {
-        const reason = "Feeden har «tdm-reservation: 1» i HTTP-headeren";
-        await this.db.source.update({ where: { id: row.id }, data: { tdmReservationFound: true } });
-        await this.fail(row.id, reason);
-        return { ...result, outcome: "blocked", reason };
-      }
 
       const cutoff = this.now.getTime() - ingestion.maxItemAgeDays * DAY_MS;
+      const seen = new Set<string>();
       const items = adapter
         .parse(response.body, response.url)
         .filter((item) => {
@@ -185,12 +236,15 @@ class IngestContext {
           return !tooOld;
         })
         .sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0))
+        // Samme guid to ganger i én feed: behold den nyeste, ellers overskriver de hverandre.
+        .filter((item) => !seen.has(item.guid) && Boolean(seen.add(item.guid)))
         .slice(0, ingestion.maxItemsPerSource);
 
       for (const item of items) {
         const outcome = await this.storeItem(row.id, source, item);
         result[outcome.status]++;
         if (outcome.fullText) result.fullTextFetched++;
+        if (outcome.reserved && outcome.status !== "unchanged") result.reserved++;
       }
 
       await this.succeed(row.id, response.headers.get("etag"), response.headers.get("last-modified"));
@@ -198,42 +252,47 @@ class IngestContext {
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       await this.fail(row.id, reason);
-      return { ...result, outcome: "failed", reason };
+      return { ...result, outcome: error instanceof AccessDeniedError ? "blocked" : "failed", reason };
     }
   }
 
-  /** Lagrer et nytt eller endret element. Uendrede elementer røres ikke, så slettefristen ikke forlenges. */
-  private async storeItem(
-    sourceId: string,
-    source: SourceConfig,
-    item: FeedItem,
-  ): Promise<{ status: "created" | "updated" | "unchanged"; fullText: boolean }> {
+  /**
+   * Lagrer et nytt eller endret element. Uendrede elementer røres ikke, så
+   * slettefristen ikke forlenges. Er elementet reservert mot tekst- og
+   * datautvinning, lagres bare tittel og lenke.
+   */
+  private async storeItem(sourceId: string, source: SourceConfig, item: FeedItem): Promise<StoreOutcome> {
     const { ingestion, retention } = this.options.config;
-    const excerpt = item.summary ? truncate(item.summary, ingestion.maxExcerptChars) : null;
-    const feedText = item.content ? truncate(item.content, ingestion.maxTextChars) : null;
-    const hash = contentHash(item.title, item.url, excerpt, feedText);
+    let reserved = await this.isItemReserved(source, item.url);
+    const excerpt = reserved || !item.summary ? null : truncate(item.summary, ingestion.maxExcerptChars);
+    const feedText = reserved || !item.content ? null : truncate(item.content, ingestion.maxTextChars);
+    const hash = contentHash(item.title, item.url, excerpt, feedText, reserved ? "tdm-reservert" : null);
 
     const existing = await this.db.sourceItem.findUnique({
       where: { sourceId_guid: { sourceId, guid: item.guid } },
       select: { id: true, contentHash: true },
     });
     if (existing?.contentHash === hash) {
-      return { status: "unchanged", fullText: false };
+      return { status: "unchanged", fullText: false, reserved };
     }
 
     let bodyText = feedText;
     let fullText = false;
-    if (!bodyText && source.allowFullTextFetch) {
-      bodyText = await this.fetchFullText(source, item.url);
-      fullText = bodyText !== null;
+    if (!reserved && !bodyText && source.allowFullTextFetch) {
+      const page = await this.fetchFullText(source, item.url);
+      bodyText = page.text;
+      fullText = page.text !== null;
+      // Reserverer artikkelsiden seg, lagres heller ikke utdraget fra feeden.
+      reserved = page.reserved;
     }
 
     const data = {
       url: item.url,
       title: truncate(item.title, 500),
       publishedAt: item.publishedAt,
-      excerpt,
-      bodyText,
+      excerpt: reserved ? null : excerpt,
+      bodyText: reserved ? null : bodyText,
+      tdmReserved: reserved,
       contentHash: hash,
       language: source.language,
       fetchedAt: this.now,
@@ -242,50 +301,91 @@ class IngestContext {
     };
     if (existing) {
       await this.db.sourceItem.update({ where: { id: existing.id }, data });
-      return { status: "updated", fullText };
+      return { status: "updated", fullText, reserved };
     }
     await this.db.sourceItem.create({ data: { sourceId, guid: item.guid, ...data } });
-    return { status: "created", fullText };
+    return { status: "created", fullText, reserved };
+  }
+
+  /**
+   * Har kilden reservert akkurat denne artikkelen mot tekst- og datautvinning
+   * (tdmrep.json-regler for stien eller sperre for KI-crawlere i robots.txt)?
+   * Sjekkes for lenker på kildens egne verter, der reglene uansett er lastet.
+   * Kan reglene ikke leses, regnes artikkelen som reservert.
+   */
+  private async isItemReserved(source: SourceConfig, url: string): Promise<boolean> {
+    let target: URL;
+    try {
+      target = new URL(url);
+    } catch {
+      return false;
+    }
+    if (!this.ownHosts(source).has(target.host)) {
+      return false;
+    }
+    target.protocol = "https:";
+    const policy = await this.policyFor(target.origin);
+    const { robots, tdm } = evaluateAccess(policy, target.toString(), this.options.config.ingestion);
+    // Sperrer robots.txt stien, ble TDM ikke vurdert. Vi henter den uansett ikke, men feedteksten er lisensiert.
+    return robots.ok && tdm !== null && !tdm.ok;
   }
 
   /**
    * Henter hovedteksten fra artikkelsiden. Bare for kilder med åpen lisens og
    * `allowFullTextFetch`, bare på kildens egne verter, og bare når robots.txt
-   * og TDM-reglene tillater det.
+   * og TDM-reglene tillater det, også for eventuelle omdirigeringer.
    */
-  private async fetchFullText(source: SourceConfig, url: string): Promise<string | null> {
+  private async fetchFullText(source: SourceConfig, url: string): Promise<{ text: string | null; reserved: boolean }> {
+    const none = { text: null, reserved: false };
     let target: URL;
     try {
       target = new URL(url);
     } catch {
-      return null;
+      return none;
     }
-    const ownHosts = new Set([new URL(source.homepageUrl).host, new URL(source.feedUrl!).host]);
-    if (target.protocol !== "https:" || !ownHosts.has(target.host)) {
-      return null;
+    if (target.protocol !== "https:" || !this.ownHosts(source).has(target.host)) {
+      return none;
     }
     const { ingestion } = this.options.config;
     const policy = await this.policyFor(target.origin);
-    if (!checkAccess(policy, target.toString(), ingestion).ok) {
-      return null;
-    }
     try {
-      const page = await politeFetch(target.toString(), { ...this.http, headers: { Accept: "text/html" } });
-      if (page.status !== 200 || tdmReservedByHeaderOrMeta(page.headers, page.body)) {
-        return null;
+      // guard() sjekker robots.txt og TDM for adressen og for hver omdirigering før noe hentes.
+      const page = await politeFetch(target.toString(), {
+        ...this.http,
+        headers: { Accept: "text/html" },
+        checkUrl: this.guard(policy),
+      });
+      if (tdmReservedByHeaderOrMeta(page.headers, page.body)) {
+        return { text: null, reserved: true };
+      }
+      if (page.status !== 200) {
+        return none;
       }
       const text = extractArticleText(page.body, page.url);
-      return text ? truncate(text, ingestion.maxTextChars) : null;
+      return { text: text ? truncate(text, ingestion.maxTextChars) : null, reserved: false };
     } catch {
-      return null;
+      return none;
     }
+  }
+
+  private ownHosts(source: SourceConfig): Set<string> {
+    return new Set([new URL(source.homepageUrl).host, new URL(source.feedUrl!).host]);
+  }
+
+  /** Stopper forespørsler og omdirigeringer som robots.txt eller TDM-reglene ikke tillater. */
+  private guard(policy: HostPolicy) {
+    const ingestion = this.options.config.ingestion;
+    return (url: URL) => {
+      const decision = checkAccess(policy, url.toString(), ingestion);
+      return decision.ok ? null : decision.reason;
+    };
   }
 
   /** robots.txt og tdmrep.json hentes én gang per vert per kjøring. */
   private policyFor(origin: string): Promise<HostPolicy> {
     let policy = this.policies.get(origin);
     if (!policy) {
-      policy = loadHostPolicy(origin, this.http);
+      policy = loadHostPolicy(origin, this.http, { userAgent: this.options.config.ingestion.userAgent });
       this.policies.set(origin, policy);
     }
     return policy;

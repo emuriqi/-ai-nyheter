@@ -46,6 +46,7 @@ export async function getRecentItemsForAdmin(limit = 100) {
       fetchedAt: true,
       deleteAfter: true,
       purgedAt: true,
+      tdmReserved: true,
       excerpt: true,
       bodyText: true,
       source: { select: { name: true } },

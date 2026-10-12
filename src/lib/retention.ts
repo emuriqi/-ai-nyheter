@@ -45,8 +45,11 @@ export async function pruneJobRuns(
   return { deleted: result.count };
 }
 
-/** Ingen jobb skal ta så lang tid. Eldre jobber med status RUNNING ble avbrutt. */
-export const STALE_JOB_MS = 6 * 60 * 60 * 1000;
+/**
+ * Ingen jobb skal ta så lang tid. Eldre jobber med status RUNNING ble avbrutt
+ * (f.eks. ved at prosessen døde) og blokkerer ikke nye kjøringer.
+ */
+export const STALE_JOB_MS = 90 * 60 * 1000;
 
 /** Markerer jobber som ble avbrutt (f.eks. ved at prosessen døde) som feilet. */
 export async function failStaleJobRuns(db: Db, now: Date): Promise<{ failed: number }> {

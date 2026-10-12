@@ -185,7 +185,7 @@ export const siteConfigSchema = z
       aiCrawlerTokens: z.array(z.string().min(1)).min(1),
       /** Minste tid mellom to hentinger fra samme kilde. */
       minIntervalMinutes: z.number().int().min(5).max(1440),
-      /** Maks antall nye eller endrede elementer per kilde per kjøring. */
+      /** Antall nyeste elementer fra feeden som behandles per kilde per kjøring. */
       maxItemsPerSource: z.number().int().min(1).max(200),
       /** Eldre elementer hentes ikke. */
       maxItemAgeDays: z.number().int().min(1).max(30),

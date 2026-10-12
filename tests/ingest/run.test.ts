@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { parseSiteConfig, type SiteConfig } from "@/lib/config/schema";
 import type { Db } from "@/lib/db";
-import { runIngestJob } from "@/lib/ingest/run";
+import { claimSource, runIngestJob } from "@/lib/ingest/run";
 import { DAY_MS } from "@/lib/retention";
 import { syncSourcesFromConfig } from "@/lib/sources/sync";
 import { createFakeFetch, fixture, html, text, xml } from "../helpers/fake-fetch";
@@ -157,12 +157,59 @@ describe("runIngestJob", () => {
       expect(fake.urls()).not.toContain("https://example.no/sak/1");
     });
 
-    it("respekterer tdm-reservation på artikkelsiden", async () => {
-      const reserved = fixture("article.html").replace("<head>", '<head><meta name="tdm-reservation" content="1">');
-      await run(config({ allowFullTextFetch: true }), { ...feedOnly, "https://example.no/sak/1": html(reserved) });
+    it("lagrer bare tittel og lenke når artikkelsiden reserverer seg (meta eller header)", async () => {
+      const metaReserved = fixture("article.html").replace("<head>", '<head><meta name="tdm-reservation" content="1">');
+      for (const page of [html(metaReserved), html(fixture("article.html"), { "tdm-reservation": "1" })]) {
+        await db.sourceItem.deleteMany();
+        await db.source.deleteMany();
+        const { result } = await run(config({ allowFullTextFetch: true }), { ...feedOnly, "https://example.no/sak/1": page });
+        expect(result).toMatchObject({ sources: [{ reserved: 1, fullTextFetched: 0 }] });
+        const item = await db.sourceItem.findFirstOrThrow({ where: { guid: "sak-1" } });
+        expect(item).toMatchObject({ tdmReserved: true, bodyText: null, excerpt: null, title: "Ny statistikk om eksempeltall" });
+      }
+    });
+
+    it("henter ikke artikkelsider som robots.txt sperrer, og lagrer feedteksten", async () => {
+      const { fake } = await run(config({ allowFullTextFetch: true }), {
+        ...withArticle,
+        "https://example.no/robots.txt": text("User-agent: *\nDisallow: /sak/\n"),
+      });
+      expect(fake.urls()).not.toContain("https://example.no/sak/1");
+      const item = await db.sourceItem.findFirstOrThrow({ where: { guid: "sak-1" } });
+      expect(item).toMatchObject({ bodyText: null, tdmReserved: false });
+      expect(item.excerpt).toContain("Eksempeltallet");
+    });
+
+    it("følger ikke en omdirigering fra artikkelen til en sti robots.txt sperrer", async () => {
+      const { fake } = await run(config({ allowFullTextFetch: true }), {
+        ...feedOnly,
+        "https://example.no/robots.txt": text("User-agent: *\nDisallow: /betalt/\n"),
+        "https://example.no/sak/1": new Response(null, { status: 302, headers: { location: "/betalt/sak/1" } }),
+        "https://example.no/betalt/sak/1": html(fixture("article.html")),
+      });
+      expect(fake.urls()).not.toContain("https://example.no/betalt/sak/1");
       const item = await db.sourceItem.findFirstOrThrow({ where: { guid: "sak-1" } });
       expect(item.bodyText).toBeNull();
-      expect(item.excerpt).toBe("Eksempeltallet økte med 3 prosent & mer.");
+    });
+
+    it("lagrer ingen brødtekst når artikkelsiden svarer med feil", async () => {
+      const { result } = await run(config({ allowFullTextFetch: true }), {
+        ...feedOnly,
+        "https://example.no/sak/1": text("finnes ikke", 404),
+      });
+      expect(result).toMatchObject({ sources: [{ fullTextFetched: 0, created: 3 }] });
+      expect((await db.sourceItem.findFirstOrThrow({ where: { guid: "sak-1" } })).bodyText).toBeNull();
+    });
+
+    it("kutter fulltekst etter maxTextChars", async () => {
+      const long = fixture("article.html").replace(
+        "<p>Et tredje avsnitt",
+        `<p>${"Mye mer tekst om eksempeltallet. ".repeat(200)}</p><p>Et tredje avsnitt`,
+      );
+      await run(config({ allowFullTextFetch: true }), { ...feedOnly, "https://example.no/sak/1": html(long) });
+      const item = await db.sourceItem.findFirstOrThrow({ where: { guid: "sak-1" } });
+      expect(item.bodyText!.length).toBeLessThanOrEqual(2000);
+      expect(item.bodyText!.endsWith("…")).toBe(true);
     });
 
     it("henter ikke sider på andre verter enn kildens egne", async () => {
@@ -173,6 +220,192 @@ describe("runIngestJob", () => {
       });
       expect(fake.urls().some((url) => url.startsWith("https://annen.no"))).toBe(false);
     });
+  });
+
+  it("lagrer bare tittel og lenke for artikler kilden har reservert i tdmrep.json eller robots.txt", async () => {
+    const cases: Record<string, Response>[] = [
+      { "https://example.no/.well-known/tdmrep.json": text(JSON.stringify([{ location: "/sak/", "tdm-reservation": 1 }])) },
+      { "https://example.no/robots.txt": text("User-agent: GPTBot\nDisallow: /sak/\n") },
+    ];
+    for (const routes of cases) {
+      await db.sourceItem.deleteMany();
+      await db.source.deleteMany();
+      const { result } = await run(config(), { ...feedOnly, ...routes });
+      expect(result).toMatchObject({ sources: [{ outcome: "fetched", created: 3, reserved: 3 }] });
+      const items = await db.sourceItem.findMany();
+      for (const item of items) {
+        expect(item).toMatchObject({ tdmReserved: true, excerpt: null, bodyText: null });
+      }
+    }
+  });
+
+  it("fjerner lagret tekst når kilden senere reserverer artikkelen", async () => {
+    await run(config(), feedOnly);
+    const later = new Date(NOW.getTime() + 60 * 60_000);
+    const { result } = await run(
+      config(),
+      { ...feedOnly, "https://example.no/.well-known/tdmrep.json": text('[{"location": "/sak/1", "tdm-reservation": 1}]') },
+      later,
+    );
+    expect(result).toMatchObject({ sources: [{ updated: 1, reserved: 1 }] });
+    const item = await db.sourceItem.findFirstOrThrow({ where: { guid: "sak-1" } });
+    expect(item).toMatchObject({ tdmReserved: true, excerpt: null });
+  });
+
+  it("følger ikke en omdirigering fra feeden til en sti robots.txt sperrer", async () => {
+    const { result, fake } = await run(config(), {
+      [FEED]: new Response(null, { status: 301, headers: { location: "/privat/rss" } }),
+      "https://example.no/privat/rss": xml(fixture("rss2.xml")),
+      "https://example.no/robots.txt": text("User-agent: *\nDisallow: /privat/\n"),
+    });
+    expect(result).toMatchObject({ sources: [{ outcome: "blocked" }] });
+    expect(fake.urls()).not.toContain("https://example.no/privat/rss");
+    expect(await db.sourceItem.count()).toBe(0);
+  });
+
+  it("lagrer bare én av to elementer med samme guid, og bytter ikke frem og tilbake", async () => {
+    const twins = `<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>
+      <item><title>Første</title><link>https://example.no/samme</link><description>Tekst A</description><pubDate>Mon, 12 Oct 2026 08:00:00 +0200</pubDate></item>
+      <item><title>Andre</title><link>https://example.no/samme</link><description>Tekst B</description><pubDate>Mon, 12 Oct 2026 07:00:00 +0200</pubDate></item>
+    </channel></rss>`;
+    const { result } = await run(config(), { [FEED]: xml(twins) });
+    expect(result).toMatchObject({ sources: [{ created: 1, updated: 0 }] });
+    const later = new Date(NOW.getTime() + 60 * 60_000);
+    const { result: second } = await run(config(), { [FEED]: xml(twins) }, later);
+    expect(second).toMatchObject({ sources: [{ created: 0, updated: 0, unchanged: 1 }] });
+    expect((await db.sourceItem.findFirstOrThrow()).title).toBe("Første");
+  });
+
+  it("sender User-Agent fra konfigurasjonen og behandler bare de nyeste elementene", async () => {
+    const cfg = parseSiteConfig(
+      validConfig({
+        ingestion: { ...validConfig().ingestion!, maxItemsPerSource: 1 },
+        sources: [activeSource({ feedUrl: FEED })],
+      }),
+    );
+    const { fake } = await run(cfg, feedOnly);
+    for (const call of fake.calls) {
+      expect(call.headers["user-agent"]).toBe(cfg.ingestion.userAgent);
+    }
+    expect((await db.sourceItem.findMany()).map((item) => item.guid)).toEqual(["sak-1"]);
+  });
+
+  it("bruker Last-Modified og beholder validatorene etter 304", async () => {
+    await run(config(), { [FEED]: xml(fixture("rss2.xml"), { "last-modified": "Mon, 12 Oct 2026 09:00:00 GMT" }) });
+    const later = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
+    const { fake } = await run(config(), { [FEED]: new Response(null, { status: 304 }) }, later(60));
+    expect(fake.calls.find((call) => call.url === FEED)?.headers["if-modified-since"]).toBe("Mon, 12 Oct 2026 09:00:00 GMT");
+    const { fake: third } = await run(config(), { [FEED]: new Response(null, { status: 304 }) }, later(120));
+    expect(third.calls.find((call) => call.url === FEED)?.headers["if-modified-since"]).toBe("Mon, 12 Oct 2026 09:00:00 GMT");
+  });
+
+  it("stopper en 304 med tdm-reservation og fjerner validatorene", async () => {
+    await run(config(), { [FEED]: xml(fixture("rss2.xml"), { etag: '"v1"' }) });
+    const later = new Date(NOW.getTime() + 60 * 60_000);
+    const { result } = await run(
+      config(),
+      { [FEED]: new Response(null, { status: 304, headers: { "tdm-reservation": "1" } }) },
+      later,
+    );
+    expect(result).toMatchObject({ sources: [{ outcome: "blocked" }] });
+    const source = await db.source.findUniqueOrThrow({ where: { slug: "testkilde" } });
+    expect(source).toMatchObject({ tdmReservationFound: true, etag: null, lastModified: null });
+  });
+
+  it("registrerer at TDM ikke ble vurdert når robots.txt sperrer, og ukjent når tdmrep.json ikke kan leses", async () => {
+    await run(config(), {
+      ...feedOnly,
+      "https://example.no/robots.txt": text("User-agent: *\nDisallow: /rss\n"),
+      "https://example.no/.well-known/tdmrep.json": text('[{"location": "/", "tdm-reservation": 1}]'),
+    });
+    const blocked = await db.source.findUniqueOrThrow({ where: { slug: "testkilde" } });
+    expect(blocked).toMatchObject({ robotsAllowed: false, tdmCheckedAt: null, tdmReservationFound: null });
+
+    await db.source.deleteMany();
+    await run(config(), { ...feedOnly, "https://example.no/.well-known/tdmrep.json": text("feil", 503) });
+    const unknown = await db.source.findUniqueOrThrow({ where: { slug: "testkilde" } });
+    expect(unknown).toMatchObject({ robotsAllowed: true, tdmReservationFound: null });
+    expect(unknown.tdmCheckedAt).not.toBeNull();
+  });
+
+  it("stopper feeder som er større enn grensen", async () => {
+    const cfg = parseSiteConfig(
+      validConfig({
+        ingestion: { ...validConfig().ingestion!, maxResponseBytes: 10_000 },
+        sources: [activeSource({ feedUrl: FEED })],
+      }),
+    );
+    const big = fixture("rss2.xml").replace("Kort ingress.", "x".repeat(20_000));
+    const { result } = await run(cfg, { [FEED]: xml(big) });
+    expect(result).toMatchObject({ sources: [{ outcome: "failed" }] });
+    expect(await db.sourceItem.count()).toBe(0);
+  });
+
+  it("isolerer feil per kilde, så de andre kildene hentes", async () => {
+    const cfg = parseSiteConfig(
+      validConfig({
+        sources: [
+          activeSource({ slug: "odelagt", feedUrl: "https://example.no/odelagt" }),
+          activeSource({ slug: "fungerer", feedUrl: FEED }),
+        ],
+      }),
+    );
+    const { result } = await run(cfg, {
+      ...feedOnly,
+      "https://example.no/odelagt": () => Promise.reject(new TypeError("fetch failed")),
+    });
+    expect(result).toMatchObject({
+      status: "done",
+      sources: [{ slug: "odelagt", outcome: "failed" }, { slug: "fungerer", outcome: "fetched", created: 3 }],
+    });
+    const broken = await db.source.findUniqueOrThrow({ where: { slug: "odelagt" } });
+    expect(broken.lastFetchError).toBeTruthy();
+  });
+
+  it("henter Stortinget-saker med JSON-adapteren", async () => {
+    const url = "https://data.stortinget.no/eksport/saker?format=json";
+    const cfg = parseSiteConfig(
+      validConfig({
+        sources: [
+          activeSource({
+            slug: "stortinget",
+            kind: "API",
+            adapter: "stortinget-saker",
+            feedUrl: url,
+            homepageUrl: "https://data.stortinget.no/",
+          }),
+        ],
+      }),
+    );
+    const { result, fake } = await run(cfg, {
+      [url]: new Response(fixture("stortinget-saker.json"), { headers: { "content-type": "application/json" } }),
+    });
+    expect(fake.calls.find((call) => call.url === url)?.headers.accept).toBe("application/json");
+    expect(result).toMatchObject({ sources: [{ outcome: "fetched", created: 1, tooOld: 1 }] });
+    const item = await db.sourceItem.findFirstOrThrow();
+    expect(item.url).toBe("https://www.stortinget.no/no/Saker-og-publikasjoner/Saker/Sak/?p=99001");
+    expect(item.excerpt).toContain("Komité: Eksempelkomiteen");
+  });
+
+  it("lar ikke to samtidige kjøringer hente samme kilde", async () => {
+    await syncSourcesFromConfig(db, config().sources);
+    const fake = createFakeFetch(feedOnly);
+    const [a, b] = await Promise.all([
+      runIngestJob(db, { config: config(), trigger: "cron", now: NOW, fetchImpl: fake.fetchImpl }),
+      runIngestJob(db, { config: config(), trigger: "manual", now: NOW, fetchImpl: fake.fetchImpl }),
+    ]);
+    expect([a.status, b.status].sort()).toEqual(["done", "skipped"]);
+    expect(fake.urls().filter((url) => url === FEED)).toHaveLength(1);
+  });
+
+  it("reserverer en kilde atomisk, også på tvers av prosesser", async () => {
+    await syncSourcesFromConfig(db, config().sources);
+    const source = await db.source.findUniqueOrThrow({ where: { slug: "testkilde" } });
+    const claims = await Promise.all([
+      claimSource(db, source.id, NOW, 30 * 60_000),
+      claimSource(db, source.id, NOW, 30 * 60_000),
+    ]);
+    expect(claims.sort()).toEqual([false, true]);
   });
 
   it("kutter tekst etter konfigurasjonen", async () => {

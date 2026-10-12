@@ -1,4 +1,4 @@
-# CI for det frittstående repoet (emuriqi/ai-nyheter), der denne mappen er roten.
+# CI for det frittstående repoet (github.com/emuriqi/-ai-nyheter), der denne mappen er roten.
 # I emuriqi/Bot brukes .github/workflows/ai-nyheter.yml i rotmappen i stedet.
 name: ci
 

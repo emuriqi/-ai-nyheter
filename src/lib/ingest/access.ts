@@ -1,3 +1,4 @@
+import { parseHTML } from "linkedom";
 import robotsParser from "robots-parser";
 import { FetchError, politeFetch, type HttpOptions } from "./http";
 
@@ -6,14 +7,14 @@ import { FetchError, politeFetch, type HttpOptions } from "./http";
  * tekst- og datautvinning (TDMRep, W3C Community Group, og KI-crawlere som er
  * sperret i robots.txt).
  *
- * Ved tvil hentes ingenting: en robots.txt som ikke kan leses (5xx eller
+ * Ved tvil hentes ingenting: en robots.txt som ikke kan leses (5xx, 429 eller
  * nettverksfeil) behandles som full sperre, og en tdmrep.json som ikke kan
- * leses behandles som reservasjon.
+ * leses behandles som ukjent, som også stopper hentingen.
  */
 
 export type AccessDecision =
   | { ok: true }
-  | { ok: false; kind: "robots" | "tdm"; reason: string };
+  | { ok: false; kind: "robots" | "tdm"; reason: string; unknown?: boolean };
 
 type Robots = ReturnType<typeof robotsParser>;
 type RobotsState = { kind: "parsed"; robots: Robots } | { kind: "allow-all" } | { kind: "disallow-all"; reason: string };
@@ -26,14 +27,33 @@ export type HostPolicy = {
   tdm: TdmState;
 };
 
+type AccessOptions = { userAgent: string; aiCrawlerTokens: string[] };
+
+/** Grenser for tdmrep.json, så en stor eller fiendtlig fil ikke kan gjøre sjekken treg. */
+const MAX_TDM_RULES = 500;
+const MAX_PATTERN_LENGTH = 1000;
+/** Bare starten av en HTML-side leses når vi leter etter tdm-reservation i <meta>. */
+const META_SCAN_BYTES = 64 * 1024;
+
 /** Produktnavnet i User-Agent («AI-nyheter/0.2 (...)» → «AI-nyheter»), brukt mot robots.txt. */
 export function robotsToken(userAgent: string): string {
   return userAgent.split("/")[0];
 }
 
-/** Henter robots.txt og /.well-known/tdmrep.json for en vert. */
-export async function loadHostPolicy(origin: string, http: HttpOptions): Promise<HostPolicy> {
-  const [robots, tdm] = await Promise.all([loadRobots(origin, http), loadTdm(origin, http)]);
+/**
+ * Henter robots.txt og deretter /.well-known/tdmrep.json for en vert.
+ * tdmrep.json hentes bare når robots.txt tillater det.
+ */
+export async function loadHostPolicy(
+  origin: string,
+  http: HttpOptions,
+  options: { userAgent: string },
+): Promise<HostPolicy> {
+  const robots = await loadRobots(origin, http);
+  const tdmUrl = `${origin}/.well-known/tdmrep.json`;
+  const tdm: TdmState = robotsAllows(robots, tdmUrl, robotsToken(options.userAgent))
+    ? await loadTdm(tdmUrl, http)
+    : { kind: "unknown", reason: "robots.txt tillater ikke å lese tdmrep.json" };
   return { origin, robots, tdm };
 }
 
@@ -43,6 +63,10 @@ async function loadRobots(origin: string, http: HttpOptions): Promise<RobotsStat
     const result = await politeFetch(url, { ...http, headers: { Accept: "text/plain" } });
     if (result.status >= 200 && result.status < 300) {
       return { kind: "parsed", robots: robotsParser(url, result.body) };
+    }
+    if (result.status === 429) {
+      // Serveren ber oss vente. Da vet vi ikke hva reglene er, så vi henter ingenting.
+      return { kind: "disallow-all", reason: "robots.txt svarte 429 (for mange forespørsler)" };
     }
     if (result.status >= 400 && result.status < 500) {
       // RFC 9309: «unavailable» betyr at det ikke finnes regler.
@@ -54,12 +78,12 @@ async function loadRobots(origin: string, http: HttpOptions): Promise<RobotsStat
   }
 }
 
-async function loadTdm(origin: string, http: HttpOptions): Promise<TdmState> {
+async function loadTdm(url: string, http: HttpOptions): Promise<TdmState> {
   try {
-    const result = await politeFetch(`${origin}/.well-known/tdmrep.json`, {
-      ...http,
-      headers: { Accept: "application/json" },
-    });
+    const result = await politeFetch(url, { ...http, headers: { Accept: "application/json" } });
+    if (result.status === 429) {
+      return { kind: "unknown", reason: "tdmrep.json svarte 429 (for mange forespørsler)" };
+    }
     if (result.status >= 400 && result.status < 500) {
       return { kind: "rules", rules: [] };
     }
@@ -81,64 +105,109 @@ export function parseTdmRep(body: string): TdmRule[] {
     return [];
   }
   if (!Array.isArray(data)) return [];
-  return data.flatMap((rule): TdmRule[] => {
+  return data.slice(0, MAX_TDM_RULES).flatMap((rule): TdmRule[] => {
     if (typeof rule !== "object" || rule === null) return [];
     const { location, "tdm-reservation": reservation } = rule as Record<string, unknown>;
-    if (typeof location !== "string" || (reservation !== 0 && reservation !== 1)) return [];
+    if (typeof location !== "string" || location.length > MAX_PATTERN_LENGTH) return [];
+    if (reservation !== 0 && reservation !== 1) return [];
     return [{ pattern: location, reserved: reservation === 1 }];
   });
 }
 
-/** Mønster i robots.txt-stil: prefiks, «*» for hva som helst og «$» for slutt. */
+/**
+ * Mønster i robots.txt-stil: prefiks, «*» for hva som helst og «$» for slutt.
+ * Matcher i lineær tid (ingen regulære uttrykk), så mønstre fra en ekstern
+ * tdmrep.json ikke kan låse prosessen.
+ */
 export function matchesPattern(pattern: string, path: string): boolean {
   const anchored = pattern.endsWith("$");
-  const body = anchored ? pattern.slice(0, -1) : pattern;
-  const regex = body
-    .split("*")
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
-    .join(".*");
-  return new RegExp(`^${regex}${anchored ? "$" : ""}`).test(path);
-}
+  const parts = (anchored ? pattern.slice(0, -1) : pattern).split("*");
+  const first = parts[0];
+  if (!path.startsWith(first)) return false;
+  let position = first.length;
 
-/** Er stien reservert etter TDMRep-reglene? Det mest spesifikke (lengste) mønsteret vinner. */
-export function isTdmReserved(rules: TdmRule[], path: string): boolean {
-  let best: TdmRule | undefined;
-  for (const rule of rules) {
-    if (matchesPattern(rule.pattern, path) && (!best || rule.pattern.length > best.pattern.length)) {
-      best = rule;
-    }
+  if (parts.length === 1) {
+    return anchored ? path.length === first.length : true;
   }
-  return best?.reserved ?? false;
+  const last = parts[parts.length - 1];
+  for (const part of parts.slice(1, -1)) {
+    const index = path.indexOf(part, position);
+    if (index < 0) return false;
+    position = index + part.length;
+  }
+  if (anchored) {
+    return path.length - last.length >= position && path.endsWith(last);
+  }
+  return path.indexOf(last, position) >= 0;
 }
 
-/** «tdm-reservation: 1» i HTTP-headeren eller i en <meta>-tag. */
+/**
+ * Er stien reservert etter TDMRep-reglene? Protokollen sier at det mest
+ * spesifikke treffet gjelder, og at det er det første i rekkefølgen.
+ */
+export function isTdmReserved(rules: TdmRule[], path: string): boolean {
+  return rules.find((rule) => matchesPattern(rule.pattern, path))?.reserved ?? false;
+}
+
+/** «tdm-reservation: 1» i HTTP-headeren eller i en <meta>-tag i starten av siden. */
 export function tdmReservedByHeaderOrMeta(headers: Headers, html?: string): boolean {
   if (headers.get("tdm-reservation")?.trim() === "1") return true;
-  if (!html) return false;
-  const meta = /<meta\s[^>]*name=["']tdm-reservation["'][^>]*>/i.exec(html)?.[0];
-  return meta ? /content=["']\s*1\s*["']/i.test(meta) : false;
+  if (!html || !/tdm-reservation/i.test(html.slice(0, META_SCAN_BYTES))) return false;
+  const { document } = parseHTML(html.slice(0, META_SCAN_BYTES));
+  // Attributtnavn sammenlignes uten hensyn til store og små bokstaver (linkedom gjør det ikke selv).
+  for (const meta of document.querySelectorAll("meta")) {
+    const attributes = new Map(
+      Array.from(meta.attributes as ArrayLike<{ name: string; value: string }>, (attr) => [
+        attr.name.toLowerCase(),
+        attr.value.trim(),
+      ]),
+    );
+    if (attributes.get("name")?.toLowerCase() === "tdm-reservation") {
+      return attributes.get("content") === "1";
+    }
+  }
+  return false;
+}
+
+/** Resultatet av robots- og TDM-sjekken hver for seg, til visning i admin. */
+export type AccessReport = {
+  robots: AccessDecision;
+  /** null når TDM ikke ble vurdert fordi robots.txt allerede sperret. */
+  tdm: AccessDecision | null;
+};
+
+export function evaluateAccess(policy: HostPolicy, url: string, options: AccessOptions): AccessReport {
+  const target = new URL(url);
+  if (target.origin !== policy.origin) {
+    return { robots: { ok: false, kind: "robots", reason: `URL-en hører ikke til ${policy.origin}` }, tdm: null };
+  }
+  const robots = checkRobots(policy.robots, url, options);
+  if (!robots.ok) {
+    return { robots, tdm: null };
+  }
+  return { robots, tdm: checkTdm(policy, target, options) };
 }
 
 /** Avgjør om URL-en kan hentes, gitt reglene for verten. */
-export function checkAccess(
-  policy: HostPolicy,
-  url: string,
-  { userAgent, aiCrawlerTokens }: { userAgent: string; aiCrawlerTokens: string[] },
-): AccessDecision {
-  const target = new URL(url);
-  if (target.origin !== policy.origin) {
-    return { ok: false, kind: "robots", reason: `URL-en hører ikke til ${policy.origin}` };
-  }
+export function checkAccess(policy: HostPolicy, url: string, options: AccessOptions): AccessDecision {
+  const { robots, tdm } = evaluateAccess(policy, url, options);
+  return robots.ok ? (tdm ?? robots) : robots;
+}
 
-  const robots = policy.robots;
-  if (robots.kind === "disallow-all") {
-    return { ok: false, kind: "robots", reason: robots.reason };
+function checkRobots(state: RobotsState, url: string, options: AccessOptions): AccessDecision {
+  if (state.kind === "disallow-all") {
+    return { ok: false, kind: "robots", reason: state.reason };
   }
-  if (robots.kind === "parsed") {
-    if (robots.robots.isAllowed(url, robotsToken(userAgent)) === false) {
-      return { ok: false, kind: "robots", reason: `robots.txt sperrer ${target.pathname}` };
-    }
-    const blockedAi = aiCrawlerTokens.find((token) => robots.robots.isAllowed(url, token) === false);
+  if (!robotsAllows(state, url, robotsToken(options.userAgent))) {
+    return { ok: false, kind: "robots", reason: `robots.txt sperrer ${new URL(url).pathname}` };
+  }
+  return { ok: true };
+}
+
+function checkTdm(policy: HostPolicy, target: URL, options: AccessOptions): AccessDecision {
+  if (policy.robots.kind === "parsed") {
+    const robots = policy.robots.robots;
+    const blockedAi = options.aiCrawlerTokens.find((token) => robots.isAllowed(target.toString(), token) === false);
     if (blockedAi) {
       return {
         ok: false,
@@ -147,14 +216,19 @@ export function checkAccess(
       };
     }
   }
-
   if (policy.tdm.kind === "unknown") {
-    return { ok: false, kind: "tdm", reason: policy.tdm.reason };
+    return { ok: false, kind: "tdm", reason: policy.tdm.reason, unknown: true };
   }
   if (isTdmReserved(policy.tdm.rules, target.pathname + target.search)) {
     return { ok: false, kind: "tdm", reason: "tdmrep.json reserverer stien mot tekst- og datautvinning" };
   }
   return { ok: true };
+}
+
+function robotsAllows(state: RobotsState, url: string, token: string): boolean {
+  if (state.kind === "allow-all") return true;
+  if (state.kind === "disallow-all") return false;
+  return state.robots.isAllowed(url, token) !== false;
 }
 
 function errorMessage(error: unknown): string {
