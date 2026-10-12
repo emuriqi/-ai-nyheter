@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getSourcesForAdmin } from "@/lib/admin";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { LICENSE_LABEL, SOURCE_STATUS_LABEL, TDM_LABEL, label } from "@/lib/labels";
@@ -11,9 +12,7 @@ const STATUS_STYLE: Record<string, string> = {
   NEEDS_VERIFICATION: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
 };
 
-export default async function AdminSourcesPage() {
-  const sources = await getSourcesForAdmin();
-
+export default function AdminSourcesPage() {
   return (
     <div>
       <h1 className="font-serif text-2xl font-bold">Kilder</h1>
@@ -22,7 +21,18 @@ export default async function AdminSourcesPage() {
         kilde hentes bare når den er aktiv, og det krever åpen lisens, leste vilkår og at det ikke er
         funnet noen reservasjon mot tekst- og datautvinning.
       </p>
+      <Suspense fallback={<p className="mt-6 text-muted">Laster …</p>}>
+        <SourceList />
+      </Suspense>
+    </div>
+  );
+}
 
+async function SourceList() {
+  const sources = await getSourcesForAdmin();
+
+  return (
+    <>
       {sources.length === 0 ? (
         <p className="mt-6 rounded-lg border border-border p-6 text-muted">
           Ingen kilder i databasen. Kjør <code>npm run db:seed</code>.
@@ -75,7 +85,7 @@ export default async function AdminSourcesPage() {
           ))}
         </ul>
       )}
-    </div>
+    </>
   );
 }
 

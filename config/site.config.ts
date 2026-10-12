@@ -90,11 +90,11 @@ export default defineSiteConfig({
       attribution: "Kilde: Stortinget (data.stortinget.no), NLOD",
       language: "nb",
       status: "NEEDS_VERIFICATION",
-      termsReviewedAt: "2026-10-12",
+      termsReviewedAt: null,
       tdmReservation: "UNKNOWN",
       allowFullTextFetch: false,
       notes:
-        "Vilkårene er lest via websøk. robots.txt er ikke sjekket ennå fordi utviklingsmiljøet blokkerte domenet.",
+        "Vilkårene er oppsummert fra websøk 12.10.2026, men ikke lest direkte på termsUrl fordi utviklingsmiljøet blokkerte domenet. robots.txt er ikke sjekket.",
     },
     {
       slug: "ssb",
@@ -110,11 +110,11 @@ export default defineSiteConfig({
       attribution: "Kilde: Statistisk sentralbyrå (SSB), CC BY 4.0",
       language: "nb",
       status: "NEEDS_VERIFICATION",
-      termsReviewedAt: "2026-10-12",
+      termsReviewedAt: null,
       tdmReservation: "UNKNOWN",
       allowFullTextFetch: true,
       notes:
-        "Feed-adressen for norsk er hentet fra en tredjepartsoversikt. SSB dokumenterer den engelske feeden https://www.ssb.no/en/rss/ og temafeeder under /rss/<tema>.",
+        "Lisensen er oppsummert fra websøk 12.10.2026, men ikke lest direkte på termsUrl. Feed-adressen for norsk er hentet fra en tredjepartsoversikt. SSB dokumenterer den engelske feeden https://www.ssb.no/en/rss/ og temafeeder under /rss/<tema>.",
     },
     {
       slug: "met-farevarsler",
@@ -130,10 +130,11 @@ export default defineSiteConfig({
       attribution: "Data fra MET Norge, NLOD 2.0 / CC BY 4.0",
       language: "nb",
       status: "NEEDS_VERIFICATION",
-      termsReviewedAt: "2026-10-12",
+      termsReviewedAt: null,
       tdmReservation: "UNKNOWN",
       allowFullTextFetch: false,
-      notes: "Feeden inneholder hele varselteksten, så lenkede sider trengs ikke.",
+      notes:
+        "Vilkårene er oppsummert fra websøk 12.10.2026, men ikke lest direkte på termsUrl. Feeden inneholder hele varselteksten, så lenkede sider trengs ikke.",
     },
     {
       slug: "eu-kommisjonen",

@@ -13,16 +13,9 @@ function errorFor(config: unknown): string {
 }
 
 describe("config/site.config.ts", () => {
+  // Skjemaets regler for aktive kilder testes nedenfor, så dette fanger alle brudd.
   it("er gyldig", () => {
     expect(() => parseSiteConfig(rawConfig)).not.toThrow();
-  });
-
-  it("har ingen aktive kilder uten leste vilkår og åpen lisens", () => {
-    const config = parseSiteConfig(rawConfig);
-    for (const source of config.sources.filter((s) => s.status === "ACTIVE")) {
-      expect(source.termsReviewedAt).not.toBeNull();
-      expect(source.license).not.toBe("UNKNOWN");
-    }
   });
 });
 
@@ -87,14 +80,21 @@ describe("parseSiteConfig", () => {
     expect(errorFor(validConfig({ retention }))).toContain("sourceTextDays");
   });
 
+  const base = validConfig();
+
   it.each([
-    ["lagring av IP-adresser", { privacy: { ...validConfig().privacy, storeIpAddresses: true } }],
-    [
-      "navngiving av privatpersoner",
-      { editorial: { ...validConfig().editorial, neverNamePrivatePersons: false } },
-    ],
-    ["visning av kildenes bilder", { editorial: { ...validConfig().editorial, showSourceImages: true } }],
-  ])("lar seg ikke konfigurere til å tillate %s", (_name, overrides) => {
-    expect(() => parseSiteConfig({ ...validConfig(), ...overrides })).toThrow();
+    ["privacy.storeIpAddresses", { privacy: { ...base.privacy, storeIpAddresses: true } }],
+    ["privacy.analytics", { privacy: { ...base.privacy, analytics: "GOOGLE_ANALYTICS" } }],
+    ["editorial.neverNamePrivatePersons", { editorial: { ...base.editorial, neverNamePrivatePersons: false } }],
+    ["editorial.showSourceImages", { editorial: { ...base.editorial, showSourceImages: true } }],
+    ["editorial.manualApproval", { editorial: { ...base.editorial, manualApproval: "NONE" } }],
+    ["editorial.sensitiveCategories", { editorial: { ...base.editorial, sensitiveCategories: [] } }],
+    ["editorial.minSourcesForPersonClaims", { editorial: { ...base.editorial, minSourcesForPersonClaims: 0 } }],
+    ["ai.articleLabel", { ai: { ...base.ai, articleLabel: "" } }],
+    ["ai.chatLabel", { ai: { ...base.ai, chatLabel: "" } }],
+    ["retention.chatLogDays", { retention: { ...base.retention, chatLogDays: 31 } }],
+    ["sources[0].termsUrl", { sources: [activeSource({ termsUrl: "http://example.no/vilkar" })] }],
+  ])("avviser ulovlig verdi for %s", (path, overrides) => {
+    expect(errorFor({ ...base, ...overrides })).toContain(path);
   });
 });

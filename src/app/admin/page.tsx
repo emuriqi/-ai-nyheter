@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getAdminOverview } from "@/lib/admin";
 import { siteConfig } from "@/lib/config";
 import { formatDateTime } from "@/lib/format";
@@ -9,14 +10,24 @@ import {
   label,
 } from "@/lib/labels";
 
-export default async function AdminOverviewPage() {
+export default function AdminOverviewPage() {
+  return (
+    <div>
+      <h1 className="font-serif text-2xl font-bold">Oversikt</h1>
+      <Suspense fallback={<p className="mt-4 text-muted">Laster …</p>}>
+        <Overview />
+      </Suspense>
+    </div>
+  );
+}
+
+async function Overview() {
   const overview = await getAdminOverview();
   const { retention, editorial } = siteConfig;
 
   return (
     <div className="space-y-10">
       <section>
-        <h1 className="font-serif text-2xl font-bold">Oversikt</h1>
         <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat label="Hentede elementer" value={overview.itemCount} />
           <Stat label="Med slettet kildetekst" value={overview.purgedCount} />

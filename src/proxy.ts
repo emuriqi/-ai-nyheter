@@ -3,8 +3,8 @@ import { checkBasicAuth } from "@/lib/auth/basic-auth";
 
 /**
  * Beskytter admin-sidene og admin-API-et med HTTP Basic Auth.
- * Sidene sjekker i tillegg selv (se src/lib/auth/require-admin.ts), så
- * tilgangskontrollen ikke avhenger av proxyen alene.
+ * Datalaget sjekker i tillegg selv (requireAdmin() i src/lib/admin.ts), så
+ * admin-data ikke lekker selv om en rute skulle gå utenom proxyen.
  */
 export function proxy(request: NextRequest) {
   const result = checkBasicAuth(request.headers.get("authorization"), process.env.ADMIN_TOKEN);
@@ -13,7 +13,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
   if (result === "disabled") {
-    return new NextResponse("Admin er avslått. Sett ADMIN_TOKEN (minst 12 tegn) i .env.", {
+    return new NextResponse("Admin er avslått. Sett ADMIN_TOKEN til en tilfeldig verdi på minst 24 tegn i .env.", {
       status: 503,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });

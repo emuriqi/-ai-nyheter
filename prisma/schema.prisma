@@ -174,9 +174,9 @@ model Article {
   body            String
   version         Int           @default(1)
   status          ArticleStatus @default(DRAFT)
-  /// Settes når en rettelse er gjort. Gir synlig «Rettet»-merking.
+  /// Settes sammen med en CORRECTION-revisjon. Gir synlig «Rettet»-merking.
   isCorrected     Boolean       @default(false)
-  /// Alltid true. Lagres eksplisitt så merkingen også finnes i data og metadata.
+  /// Standardverdi true. AI-merkingen vises for alle artikler uansett, aldri styrt av dette feltet.
   aiGenerated     Boolean       @default(true)
   model           String
   promptVersion   String
@@ -186,7 +186,10 @@ model Article {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  story     Story             @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  /// Restrict: en sak med artikkel kan ikke slettes ved et uhell (f.eks. ved
+  /// gruppering). Publiserte artikler avpubliseres med begrunnelse; sletting
+  /// (f.eks. etter krav fra rettighetshaver) må gjøres eksplisitt på artikkelen.
+  story     Story             @relation(fields: [storyId], references: [id], onDelete: Restrict)
   revisions ArticleRevision[]
 
   @@index([status, publishedAt])

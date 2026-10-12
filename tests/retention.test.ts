@@ -2,7 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db";
 import {
   DAY_MS,
+  STALE_JOB_MS,
   computeDeleteAfter,
+  failStaleJobRuns,
   pruneJobRuns,
   purgeExpiredSourceText,
   runRetentionJob,
@@ -106,7 +108,14 @@ describe("sletting av kildetekst", () => {
     expect(purged).toBe(1);
   });
 
-  it("sletter gamle, ferdige jobblogger og beholder nye og kjørende", async () => {
+  it("respekterer slettetidspunktet som ble satt ved henting, selv om perioden senere er forlenget", async () => {
+    // Hentet for 10 dager siden med 7 dagers periode, men perioden er nå 30 dager.
+    await item("kort-frist", 10, 7);
+    const { purged } = await purgeExpiredSourceText(db, { now, retentionDays: 30 });
+    expect(purged).toBe(1);
+  });
+
+  it("sletter gamle jobblogger, også avbrutte, og beholder nye", async () => {
     const old = new Date(now.getTime() - 100 * DAY_MS);
     await db.jobRun.createMany({
       data: [
@@ -116,8 +125,19 @@ describe("sletting av kildetekst", () => {
       ],
     });
     const { deleted } = await pruneJobRuns(db, { now, retentionDays: 90 });
-    expect(deleted).toBe(1);
-    expect(await db.jobRun.count()).toBe(2);
+    expect(deleted).toBe(2);
+    expect(await db.jobRun.count()).toBe(1);
+  });
+
+  it("markerer jobber som har stått som kjørende for lenge som feilet", async () => {
+    const stale = await db.jobRun.create({
+      data: { type: "INGEST", trigger: "cron", startedAt: new Date(now.getTime() - STALE_JOB_MS - 1000) },
+    });
+    const running = await db.jobRun.create({ data: { type: "INGEST", trigger: "cron", startedAt: now } });
+
+    expect(await failStaleJobRuns(db, now)).toEqual({ failed: 1 });
+    expect((await db.jobRun.findUniqueOrThrow({ where: { id: stale.id } })).status).toBe("FAILED");
+    expect((await db.jobRun.findUniqueOrThrow({ where: { id: running.id } })).status).toBe("RUNNING");
   });
 
   it("logger slettejobben med statistikk", async () => {

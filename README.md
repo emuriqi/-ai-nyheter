@@ -38,7 +38,7 @@ AI-forordning). Juridiske hensyn styrer designet, og alle juridisk relevante inn
 Krever Node.js 22 eller nyere.
 
 ```bash
-cp .env.example .env       # sett ADMIN_TOKEN (minst 12 tegn) for å bruke /admin
+cp .env.example .env       # sett ADMIN_TOKEN for å bruke /admin, f.eks. med: openssl rand -base64 32
 npm install                # genererer også Prisma-klienten
 npm run db:deploy          # lager prisma/dev.db og kjører migreringene
 npm run db:seed            # synkroniserer kildene fra config/site.config.ts
@@ -46,6 +46,8 @@ npm run dev                # http://localhost:3000
 ```
 
 Admin ligger på <http://localhost:3000/admin>. Brukernavnet er `admin`, og passordet er `ADMIN_TOKEN` fra `.env`.
+Passordet må være tilfeldig og minst 24 tegn, ellers er admin avslått. Tilgangen sjekkes både i `src/proxy.ts` og i
+datalaget (`src/lib/admin.ts`), siden en sjekk i layouten ikke hindrer at sidens data sendes til nettleseren.
 
 ## Arkitektur
 
@@ -76,7 +78,7 @@ src/app/                   Sider og API-ruter (forside, /admin, /api/health)
 src/lib/config/            zod-skjema og validert konfigurasjon
 src/lib/retention.ts       Sletteregler for kildetekst og jobblogg
 src/lib/sources/sync.ts    Synkronisering av kilder
-src/lib/auth/              Basic Auth for admin (proxy og serverside)
+src/lib/auth/              Basic Auth for admin (proxy og datalag)
 src/proxy.ts               Beskytter /admin og /api/admin
 tests/                     Vitest-tester
 ```
@@ -87,7 +89,7 @@ tests/                     Vitest-tester
 | ------------------ | ------------------------------------------------------------------------------------------- |
 | `Source`           | En kilde med lisens, vilkår og status. Konfigurasjonen er fasit.                            |
 | `SourceItem`       | Én hentet artikkel. Teksten slettes etter sletteperioden, men tittel og URL beholdes.       |
-| `Story`            | En sak som samler kildeartikler om det samme, med eventuell sensitivitetsmerking.          |
+| `Story`            | En sak som samler kildeartikler. Kan ikke slettes så lenge den har en artikkel.            |
 | `Article`          | Gjeldende versjon av artikkelen: status, versjon, «Rettet»-merking og AI-merking.           |
 | `ArticleRevision`  | Endringsloggen. Hver versjon er et fullt øyeblikksbilde med hva som endret seg og hvorfor. |
 | `RevisionSource`   | Hvilke kildeartikler hver versjon bygger på.                                               |
@@ -98,9 +100,9 @@ Det finnes bevisst ingen tabell for chatter. Chatter lagres ikke som standard.
 
 ## Kilder
 
-Kildene er valgt fordi lisensen tillater gjenbruk. Alle står foreløpig som «Må verifiseres». En kilde kan bare
-aktiveres når vilkårene er lest, lisensen er åpen og det ikke er funnet noen reservasjon mot tekst- og
-datautvinning. Det håndheves av skjemaet i `src/lib/config/schema.ts`.
+Kildene er valgt fordi lisensen tillater gjenbruk. Lisensene er foreløpig bare sjekket via websøk, så alle står som
+«Må verifiseres». En kilde kan bare aktiveres når et menneske har lest vilkårene, lisensen er åpen og det ikke er
+funnet noen reservasjon mot tekst- og datautvinning. Det håndheves av skjemaet i `src/lib/config/schema.ts`.
 
 | Kilde                         | Lisens               | Merknad                                             |
 | ----------------------------- | -------------------- | --------------------------------------------------- |
@@ -122,6 +124,7 @@ NRK og kommersielle mediehus er valgt bort fordi vilkårene deres ikke tillater 
 | `npm test`           | Tester                                                               |
 | `npm run db:migrate` | Ny migrering etter endring i `prisma/schema.prisma`                  |
 | `npm run db:seed`    | Synkroniserer kildene fra konfigurasjonen                            |
+| `npm run db:reset`   | Nullstiller databasen, kjører migreringene og synkroniserer kildene  |
 | `npm run purge`      | Sletter kildetekst som har passert sletteperioden                    |
 
 ## Tester
@@ -132,5 +135,7 @@ Testene bruker en egen, midlertidig SQLite-database per testfil, med migreringen
   vilkår, TDM-reservasjon, lagring av IP-adresser, navngiving av privatpersoner, visning av kildenes bilder)
 - sletting av kildetekst, inkludert at tittel og URL beholdes og at en kortere sletteperiode også gjelder lagret tekst
 - synkronisering av kilder fra konfigurasjonen
-- Basic Auth for admin
-- datamodellen fra kilde til endringslogg, med fremmednøkler og unike nøkler
+- tilgangskontroll for admin: hvilke ruter proxyen dekker, svarene den gir, krav til passord og at datalaget
+  avviser forespørsler uten gyldig innlogging før databasen leses
+- datamodellen fra kilde til endringslogg, med fremmednøkler og unike nøkler, og at en sak med artikkel ikke kan
+  slettes

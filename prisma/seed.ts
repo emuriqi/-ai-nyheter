@@ -4,7 +4,7 @@ import { createPrismaClient } from "@/lib/db";
 import { syncSourcesFromConfig } from "@/lib/sources/sync";
 
 // Synkroniserer kildene fra config/site.config.ts til databasen.
-// Kjøres med `npm run db:seed` (eller automatisk av `prisma migrate reset`).
+// Kjøres med `npm run db:seed`, og av `npm run db:reset` etter at databasen er nullstilt.
 const db = createPrismaClient();
 try {
   const result = await syncSourcesFromConfig(db, siteConfig.sources);

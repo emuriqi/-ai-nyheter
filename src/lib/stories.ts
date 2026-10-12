@@ -13,10 +13,14 @@ export async function getPublishedArticles(limit = 20) {
       title: true,
       lede: true,
       publishedAt: true,
-      updatedAt: true,
       version: true,
       isCorrected: true,
-      story: { select: { slug: true, _count: { select: { items: true } } } },
+      story: { select: { slug: true } },
+      revisions: {
+        orderBy: { version: "desc" },
+        take: 1,
+        select: { createdAt: true, _count: { select: { sources: true } } },
+      },
     },
   });
 }

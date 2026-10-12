@@ -1,8 +1,12 @@
 import { connection } from "next/server";
+import { requireAdmin } from "./auth/require-admin";
 import { getDb } from "./db";
+
+// Alle funksjoner her kaller requireAdmin() før de leser data.
 
 /** Tall til admin-oversikten. */
 export async function getAdminOverview() {
+  await requireAdmin();
   await connection();
   const db = getDb();
   const [sourcesByStatus, itemCount, purgedCount, storyCount, articlesByStatus, pendingReviews, recentJobs] =
@@ -29,6 +33,7 @@ export async function getAdminOverview() {
 
 /** Alle kilder med antall hentede elementer. */
 export async function getSourcesForAdmin() {
+  await requireAdmin();
   await connection();
   return getDb().source.findMany({
     orderBy: [{ status: "asc" }, { name: "asc" }],

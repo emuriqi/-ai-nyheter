@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { siteConfig } from "@/lib/config";
 
 export const metadata: Metadata = {
-  title: "Admin",
+  title: { default: "Admin", template: `%s · Admin · ${siteConfig.site.name}` },
   robots: { index: false, follow: false },
 };
 
+// Layouten gir ikke tilgangskontroll. Den ligger i proxyen og i datalaget
+// (src/lib/admin.ts kaller requireAdmin()).
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div>
@@ -20,15 +21,7 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
           Kilder
         </Link>
       </nav>
-      <Suspense fallback={<p className="text-muted">Laster …</p>}>
-        <AdminGate>{children}</AdminGate>
-      </Suspense>
+      {children}
     </div>
   );
-}
-
-/** Sjekker tilgang på serveren før noe admin-innhold rendres. */
-async function AdminGate({ children }: { children: React.ReactNode }) {
-  await requireAdmin();
-  return children;
 }

@@ -35,16 +35,26 @@ export async function purgeExpiredSourceText(
   return { purged: result.count };
 }
 
-/** Sletter gamle innslag i jobbloggen. */
+/** Sletter gamle innslag i jobbloggen, også jobber som ble avbrutt underveis. */
 export async function pruneJobRuns(
   db: Db,
   { now, retentionDays }: { now: Date; retentionDays: number },
 ): Promise<{ deleted: number }> {
   const cutoff = new Date(now.getTime() - retentionDays * DAY_MS);
-  const result = await db.jobRun.deleteMany({
-    where: { startedAt: { lt: cutoff }, status: { not: "RUNNING" } },
-  });
+  const result = await db.jobRun.deleteMany({ where: { startedAt: { lt: cutoff } } });
   return { deleted: result.count };
+}
+
+/** Ingen jobb skal ta så lang tid. Eldre jobber med status RUNNING ble avbrutt. */
+export const STALE_JOB_MS = 6 * 60 * 60 * 1000;
+
+/** Markerer jobber som ble avbrutt (f.eks. ved at prosessen døde) som feilet. */
+export async function failStaleJobRuns(db: Db, now: Date): Promise<{ failed: number }> {
+  const result = await db.jobRun.updateMany({
+    where: { status: "RUNNING", startedAt: { lt: new Date(now.getTime() - STALE_JOB_MS) } },
+    data: { status: "FAILED", finishedAt: now, error: "Avbrutt før jobben ble ferdig" },
+  });
+  return { failed: result.count };
 }
 
 /** Kjører all sletting etter konfigurasjonen og logger kjøringen som en JobRun. */
@@ -57,6 +67,7 @@ export async function runRetentionJob(
     jobRunDays,
   }: { now?: Date; trigger: string; sourceTextDays: number; jobRunDays: number },
 ) {
+  await failStaleJobRuns(db, now);
   const job = await db.jobRun.create({ data: { type: "PURGE", trigger, startedAt: now } });
   try {
     const { purged } = await purgeExpiredSourceText(db, { now, retentionDays: sourceTextDays });

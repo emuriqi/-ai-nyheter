@@ -19,7 +19,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma migrate reset --force",
+    "db:reset": "prisma migrate reset --force && prisma db seed",
     "db:check": "prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code",
     "purge": "tsx scripts/purge-expired.ts"
   },
@@ -37,6 +37,7 @@
     "@types/node": "^22.20.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "better-sqlite3": "^12.11.1",
     "dotenv": "18.0.7",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
