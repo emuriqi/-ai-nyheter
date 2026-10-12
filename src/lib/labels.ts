@@ -1,5 +1,8 @@
 // Norske visningsnavn for verdier fra databasen og konfigurasjonen.
 
+import type { ClusterStats } from "./cluster/run";
+import { describeClusterStats } from "./cluster/summary";
+
 export const SOURCE_STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Aktiv",
   PAUSED: "På pause",
@@ -44,6 +47,9 @@ export const JOB_STATUS_LABEL: Record<string, string> = {
 export function describeJobStats(type: string, stats: unknown): string {
   if (typeof stats !== "object" || stats === null) return "";
   const s = stats as Record<string, unknown>;
+  if (type === "CLUSTER" && typeof s.considered === "number") {
+    return describeClusterStats(s as unknown as ClusterStats);
+  }
   if (type === "PURGE") {
     return `Tekst slettet fra ${Number(s.purgedSourceItems ?? 0)} elementer`;
   }
@@ -51,9 +57,11 @@ export function describeJobStats(type: string, stats: unknown): string {
     const t = s.totals as Record<string, number>;
     const sources = Array.isArray(s.sources) ? s.sources.length : 0;
     if (sources === 0) return "Ingen aktive kilder";
-    return `${t.created ?? 0} nye, ${t.updated ?? 0} endret fra ${sources} ${sources === 1 ? "kilde" : "kilder"}` +
+    return (
+      `${t.created ?? 0} nye, ${t.updated ?? 0} endret fra ${sources} ${sources === 1 ? "kilde" : "kilder"}` +
       (t.blocked ? `, ${t.blocked} sperret` : "") +
-      (t.failed ? `, ${t.failed} feilet` : "");
+      (t.failed ? `, ${t.failed} feilet` : "")
+    );
   }
   return "";
 }
@@ -61,3 +69,11 @@ export function describeJobStats(type: string, stats: unknown): string {
 export function label(map: Record<string, string>, value: string): string {
   return map[value] ?? value;
 }
+
+export const CLUSTER_METHOD_LABEL: Record<string, string> = {
+  NEW: "Startet ny sak",
+  AUTO: "Lik nok til samme sak",
+  CLAUDE: "Claude: samme sak",
+  CLAUDE_NEW: "Claude: ny sak",
+  MANUAL: "Flyttet manuelt",
+};

@@ -68,3 +68,65 @@ export async function getSourcesForAdmin() {
     include: { _count: { select: { items: true } } },
   });
 }
+
+/**
+ * Sakene fra grupperingen med kildeelementene sine, nyeste først. Teksten
+ * vises ikke, bare tittel, lenke og hvordan elementet ble gruppert.
+ */
+export async function getStoriesForAdmin(limit = 50) {
+  await requireAdmin();
+  await connection();
+  const db = getDb();
+  const stories = await db.story.findMany({
+    orderBy: { lastSourceAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      slug: true,
+      workingTitle: true,
+      firstSeenAt: true,
+      lastSourceAt: true,
+      article: { select: { status: true } },
+      items: {
+        orderBy: [{ publishedAt: "asc" }, { fetchedAt: "asc" }],
+        select: {
+          id: true,
+          title: true,
+          url: true,
+          publishedAt: true,
+          fetchedAt: true,
+          clusterMethod: true,
+          clusterScore: true,
+          clusterNote: true,
+          clusterNearestStoryId: true,
+          source: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  const nearestIds = [
+    ...new Set(stories.flatMap((s) => s.items.map((i) => i.clusterNearestStoryId)).filter((id): id is string => !!id)),
+  ];
+  const nearest = await db.story.findMany({
+    where: { id: { in: nearestIds } },
+    select: { id: true, workingTitle: true, article: { select: { id: true } } },
+  });
+  const nearestById = new Map(nearest.map((s) => [s.id, s]));
+
+  const unclustered = await db.sourceItem.count({ where: { storyId: null, tdmReserved: false, purgedAt: null } });
+
+  return {
+    unclustered,
+    stories: stories.map((story) => ({
+      ...story,
+      items: story.items.map(({ clusterNearestStoryId, ...item }) => {
+        const near = clusterNearestStoryId ? nearestById.get(clusterNearestStoryId) : undefined;
+        return {
+          ...item,
+          nearest: near ? { id: near.id, workingTitle: near.workingTitle, hasArticle: near.article !== null } : null,
+        };
+      }),
+    })),
+  };
+}

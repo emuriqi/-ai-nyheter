@@ -18,7 +18,7 @@ AI-forordning). Juridiske hensyn styrer designet, og alle juridisk relevante inn
 | ---- | --------------------------------------------- | --------- |
 | 1    | Oppsett, datamodell og juridisk konfigurasjon | ✅ Ferdig |
 | 2    | Innhenting fra RSS og åpne API-er             | ✅ Ferdig |
-| 3    | Gruppering av kildeartikler til saker         | Planlagt  |
+| 3    | Gruppering av kildeartikler til saker         | ✅ Ferdig |
 | 4    | Artikkelgenerering med moderasjonssteg        | Planlagt  |
 | 5    | Oppdatering og endringslogg                   | Planlagt  |
 | 6    | Chat per sak                                  | Planlagt  |
@@ -32,7 +32,8 @@ AI-forordning). Juridiske hensyn styrer designet, og alle juridisk relevante inn
   `prisma/schema.prisma` og ny adapter i `src/lib/db.ts`.
 - **zod** for validering av konfigurasjonen
 - **Vitest** for tester
-- **Claude API** (`claude-sonnet-5-5`) via Anthropics offisielle TypeScript-SDK, fra fase 4
+- **Claude API** (`claude-sonnet-5-5`) via Anthropics offisielle TypeScript-SDK (`@anthropic-ai/sdk`). Brukes i
+  grupperingen fra fase 3 og til generering fra fase 4. Alt fungerer uten nøkkel, bare med færre automatiske avgjørelser.
 
 ## Kom i gang
 
@@ -40,6 +41,7 @@ Krever Node.js 22 eller nyere.
 
 ```bash
 cp .env.example .env       # sett ADMIN_TOKEN for å bruke /admin, f.eks. med: openssl rand -base64 32
+                           # ANTHROPIC_API_KEY er valgfri (se Gruppering)
 npm install                # genererer også Prisma-klienten
 npm run db:deploy          # lager prisma/dev.db og kjører migreringene
 npm run db:seed            # synkroniserer kildene fra config/site.config.ts
@@ -66,8 +68,9 @@ datalaget (`src/lib/admin.ts`), siden en sjekk i layouten ikke hindrer at sidens
                        │  valideres med zod ved oppstart
                        ▼
  RSS / åpne API-er ─► Innhenting ─► SourceItem ─► Gruppering ─► Story
-                      robots.txt,                 (fase 3)        │
-                      TDM-sjekk                                   ▼
+                      robots.txt,                 TF-IDF lokalt,  │
+                      TDM-sjekk                   Claude i        │
+                                                  gråsonen        ▼
                                                Generering ─► Moderasjon ─► Article (+ ArticleRevision)
                                                (fase 4)      AI-kontroll   publisert eller til
                                                              mot kildene   manuell godkjenning
@@ -99,11 +102,64 @@ datalaget (`src/lib/admin.ts`), siden en sjekk i layouten ikke hindrer at sidens
    - **Fulltekst fra artikkelsiden** er avslått for alle kilder. Det kan slås på per kilde med `allowFullTextFetch`
      (krever åpen lisens), og hentes da bare fra kildens egne verter og bare når robots.txt og TDM-reglene
      tillater det. Hovedteksten hentes ut med Mozillas Readability.
-3. **Slett utløpt kildetekst** og gamle jobblogger.
+3. **Grupper nye elementer i saker** (se under).
+4. **Slett utløpt kildetekst** og gamle jobblogger.
 
 Hver kjøring logges som en `JobRun` med resultat per kilde. To kjøringer i samme prosess kan ikke gå samtidig, og på
 tvers av prosesser (f.eks. `npm run ingest` mens serveren kjører) reserveres hver kilde atomisk i databasen, så samme
 kilde ikke hentes to ganger innenfor minste intervall.
+
+### Gruppering (fase 3)
+
+Hvert nytt element legges i den åpne saken det ligner mest på, eller starter en ny sak
+(`src/lib/cluster/`). Elementene behandles i tidsrekkefølge, som i klassisk «single-pass»-gruppering fra forskningen
+på Topic Detection and Tracking.
+
+1. **Teksten gjøres om til ord.** Tittel (dobbel vekt), utdrag og starten av brødteksten deles i ord, norske stoppord
+   fjernes, og ordene stammes med Snowball-stemmeren for norsk («regjeringen» og «regjeringa» blir «regjering»).
+   Egennavn som Klepp, Agder og NVE teller dobbelt, fordi de skiller best mellom to saker om samme tema.
+   Ledetekster i faktalister (som «Status:» og «Komité:» fra Stortinget) fjernes.
+2. **Ordene vektes med TF-IDF** over elementene fra de siste `idfWindowDays` dagene, så ord som står overalt
+   («regjeringen», «prosent») teller lite.
+3. **Likheten måles med cosinus** mot hvert element i de åpne sakene. En sak er åpen så lenge det nye elementet er
+   publisert innenfor `storyWindowHours` fra sakens første eller siste kilde.
+4. **Avgjørelsen** følger to grenser i `config/site.config.ts`:
+   - likhet fra `sameStoryThreshold` (0,40): samme sak
+   - under `borderlineThreshold` (0,15): ny sak
+   - imellom er en gråsone. Der avgjør Claude (`prompts/cluster-same-story.md`) hvis `ANTHROPIC_API_KEY` er satt.
+     Claude får bare tittel og et kort utdrag (maks 600 tegn) fra det nye elementet og fra opptil tre kandidatsaker,
+     og svarer med et strukturert svar (A, B, C eller «ingen») og en kort begrunnelse. Uten nøkkel, ved feil eller
+     når grensen `maxClaudeChecksPerRun` er nådd, blir elementet en egen sak og merkes som usikkert.
+
+Grensene er valgt mot et syntetisk testkorpus (`tests/fixtures/cluster-corpus.json`): 48 oppdiktede elementer om
+19 hendelser, skrevet av flere uavhengige KI-agenter i sju kildestiler (farevarsel, etat, departement, Stortinget,
+SSB, kommune, nyhetsbyrå). Korpuset har bevisst vanskelige par: to farevarsler samme dag, fugleinfluensa i to
+fylker, to lovforslag fra samme departement som Stortinget mottok samme dag, og KPI for to måneder. Målt med
+`npm run eval:cluster`:
+
+| Oppsett                         | Presisjon | Dekning | Saker (fasit 19) |
+| ------------------------------- | --------- | ------- | ---------------- |
+| Uten Claude                     | 100 %     | 59 %    | 27               |
+| Med en perfekt dommer i gråsonen | 100 %     | 100 %   | 19 (15 vurderinger) |
+
+Presisjon er andelen par i samme sak som virkelig hører sammen, og dekning er andelen par som hører sammen og ble
+lagt sammen. Grensene prioriterer presisjon: å blande to saker gir feil fakta i artikkelen, mens en sak som er
+delt i to bare gir et ekstra utkast som redaktøren ser før publisering. Raden med perfekt dommer viser hva
+gråsonen kan gi; hvor nær Claude kommer, måles med `npm run eval:cluster -- --claude` (krever nøkkel, om lag 15
+korte kall). Korpuset er lite og skrevet for testen, så tallene sier mer om de vanskelige tilfellene enn om ekte
+trafikk.
+
+Elementer som kilden har reservert mot tekst- og datautvinning, analyseres ikke og grupperes derfor ikke. Det
+samme gjelder elementer fra kilder som ikke er aktive og elementer der teksten er slettet.
+
+Admin-siden **Saker** viser hver sak med kildene, hvordan hvert element ble gruppert, likheten og Claudes
+begrunnelse. Usikre elementer er merket og viser saken de lignet mest på, med en knapp for å flytte dem dit. Et
+element kan også skilles ut til en egen sak. Saker som har fått en artikkel, kan ikke endres her; det skal gå
+gjennom oppdateringsflyten med endringslogg (fase 5).
+
+Kall til Claude bruker `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`): hvis modellen avviser en
+forespørsel, kjører API-et den på nytt med reservemodellen Anthropic anbefaler for den typen avslag, i samme kall.
+Hver kjøring lagrer antall kall og tokens i jobbloggen.
 
 ### Mappestruktur
 
@@ -114,8 +170,12 @@ prisma/migrations/         SQL-migreringer
 prisma/seed.ts             Synkroniserer kildene fra konfigurasjonen til databasen
 scripts/ingest.ts          Kjører innhenting og sletting (npm run ingest)
 scripts/purge-expired.ts   Sletter kildetekst som har passert sletteperioden
+scripts/eval-clustering.ts Måler grupperingen på testkorpuset (npm run eval:cluster)
+prompts/                   Promptene til Claude, én fil per oppgave
 src/app/                   Sider og API-ruter (forside, /admin, /api/cron/ingest, /api/health)
 src/lib/ingest/            Innhenting: HTTP, robots.txt/TDM, feed-parser, adaptere, jobben
+src/lib/cluster/           Gruppering: tekstanalyse, plassering, Claude i gråsonen, jobben, manuell flytting
+src/lib/ai/                Claude-klient og lasting av prompter
 src/lib/config/            zod-skjema og validert konfigurasjon
 src/lib/retention.ts       Sletteregler for kildetekst og jobblogg
 src/lib/sources/sync.ts    Synkronisering av kilder
@@ -129,7 +189,7 @@ tests/                     Vitest-tester
 | Modell             | Rolle                                                                                       |
 | ------------------ | ------------------------------------------------------------------------------------------- |
 | `Source`           | En kilde med lisens, vilkår og status. Konfigurasjonen er fasit.                            |
-| `SourceItem`       | Én hentet artikkel. Teksten slettes etter sletteperioden, men tittel og URL beholdes.       |
+| `SourceItem`       | Én hentet artikkel. Teksten slettes etter sletteperioden, men tittel og URL beholdes. Lagrer også hvordan elementet ble gruppert (metode, likhet, Claudes begrunnelse). |
 | `Story`            | En sak som samler kildeartikler. Kan ikke slettes så lenge den har en artikkel.            |
 | `Article`          | Gjeldende versjon av artikkelen: status, versjon, «Rettet»-merking og AI-merking.           |
 | `ArticleRevision`  | Endringsloggen. Hver versjon er et fullt øyeblikksbilde med hva som endret seg og hvorfor. |
@@ -164,7 +224,8 @@ NRK og kommersielle mediehus er valgt bort fordi vilkårene deres ikke tillater 
 | `npm run check`      | Lint, typesjekk, tester og sjekk av at migreringene matcher skjemaet |
 | `npm test`           | Tester                                                               |
 | `npm run db:migrate` | Ny migrering etter endring i `prisma/schema.prisma`                  |
-| `npm run ingest`     | Synkroniserer kildene, henter fra aktive kilder og sletter gammel tekst |
+| `npm run ingest`     | Synkroniserer kildene, henter fra aktive kilder, grupperer og sletter gammel tekst |
+| `npm run eval:cluster` | Måler grupperingen på testkorpuset. Med `-- --claude` brukes Claude i gråsonen |
 | `npm run db:seed`    | Synkroniserer kildene fra konfigurasjonen                            |
 | `npm run db:reset`   | Nullstiller databasen, kjører migreringene og synkroniserer kildene  |
 | `npm run purge`      | Sletter kildetekst som har passert sletteperioden                    |
@@ -172,7 +233,7 @@ NRK og kommersielle mediehus er valgt bort fordi vilkårene deres ikke tillater 
 ## Tester
 
 Testene bruker en egen, midlertidig SQLite-database per testfil, med migreringene fra `prisma/migrations`. De går
-aldri mot nettet: innhentingen testes med en falsk `fetch` og syntetiske eksempelfeeder i `tests/fixtures/`. De dekker:
+aldri mot nettet: innhentingen testes med en falsk `fetch` og syntetiske eksempelfeeder i `tests/fixtures/`. Claude kalles aldri: `ANTHROPIC_API_KEY` tømmes i `vitest.config.ts`, og Claude-delen testes med en falsk klient. De dekker:
 
 - at konfigurasjonen er gyldig, og at skjemaet stopper ulovlige oppsett (aktiv kilde uten åpen lisens eller leste
   vilkår, TDM-reservasjon, lagring av IP-adresser, navngiving av privatpersoner, visning av kildenes bilder)
@@ -182,8 +243,15 @@ aldri mot nettet: innhentingen testes med en falsk `fetch` og syntetiske eksempe
   KI-crawlere, også for enkeltartikler og ved omdirigeringer), at ingenting hentes når reglene ikke kan leses,
   størrelsesgrense, tegnsett, tidsavbrudd, betingede forespørsler, minste intervall, duplikater og endringer,
   fulltekst bare fra kildens egne verter, feil i én kilde som ikke stopper de andre, og samtidige kjøringer
-- hele pipelinen mot en ekte database: synkronisering, innhenting, sletting av utløpt tekst og oppsummeringen
-- knappen «Kjør innhenting nå» (tilgangssjekk i server action)
+- gruppering: ordstammer, stoppord, egennavn, ledetekster, TF-IDF og cosinus, grensene og gråsonen, tidsvinduet,
+  hva Claude får se (bare tittel og kort utdrag, uten mulighet til å lage egne tagger), avslag og feil, og kvaliteten
+  på testkorpuset (ingen feil sammenslåinger, de vanskelige parene holdes adskilt)
+- grupperingsjobben mot en ekte database: nye saker og saker fra tidligere kjøringer, at reserverte, slettede og
+  pausede elementer ikke grupperes, lagring av metode, likhet og begrunnelse, og manuell flytting i admin (ikke for
+  saker med artikkel)
+- hele pipelinen mot en ekte database: synkronisering, innhenting, gruppering, sletting av utløpt tekst og
+  oppsummeringen
+- knappene «Kjør innhenting nå», «Skill ut» og «Flytt» (tilgangssjekk i server actions, validering og feilmeldinger)
 - cron-ruten og Bearer-tokenet
 - tilgangskontroll for admin: hvilke ruter proxyen dekker, svarene den gir, krav til passord og at datalaget
   avviser forespørsler uten gyldig innlogging før databasen leses

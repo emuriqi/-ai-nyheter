@@ -57,10 +57,7 @@ async function Overview() {
           <li>
             Chatlogger: {retention.chatLogDays === 0 ? "lagres ikke" : `slettes etter ${retention.chatLogDays} dager`}
           </li>
-          <li>
-            Manuell godkjenning:{" "}
-            {editorial.manualApproval === "ALL" ? "alle saker" : "bare saker som flagges"}
-          </li>
+          <li>Manuell godkjenning: {editorial.manualApproval === "ALL" ? "alle saker" : "bare saker som flagges"}</li>
           <li>Lengste tillatte sitat: {editorial.maxQuoteWords} ord</li>
         </ul>
       </section>
@@ -78,33 +75,36 @@ async function Overview() {
           </form>
         </div>
         <p className="mt-1 text-sm text-muted">
-          Synkroniserer kildene, henter fra aktive kilder og sletter utløpt kildetekst. Kan ta litt tid.
+          Synkroniserer kildene, henter fra aktive kilder, grupperer nye elementer i saker og sletter utløpt kildetekst.
+          Kan ta litt tid.
         </p>
         {overview.recentJobs.length === 0 ? (
           <p className="mt-2 text-sm text-muted">Ingen jobber er kjørt ennå.</p>
         ) : (
-          <table className="mt-3 w-full text-left text-sm">
-            <thead className="text-muted">
-              <tr>
-                <th className="py-1 font-normal">Jobb</th>
-                <th className="py-1 font-normal">Status</th>
-                <th className="py-1 font-normal">Startet</th>
-                <th className="py-1 font-normal">Utløst av</th>
-                <th className="py-1 font-normal">Resultat</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overview.recentJobs.map((job) => (
-                <tr key={job.id} className="border-t border-border">
-                  <td className="py-1">{label(JOB_TYPE_LABEL, job.type)}</td>
-                  <td className="py-1">{label(JOB_STATUS_LABEL, job.status)}</td>
-                  <td className="py-1">{formatDateTime(job.startedAt)}</td>
-                  <td className="py-1">{job.trigger}</td>
-                  <td className="py-1">{job.error ? `Feil: ${job.error}` : describeJobStats(job.type, job.stats)}</td>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-muted">
+                <tr>
+                  <th className="py-1 pr-4 font-normal">Jobb</th>
+                  <th className="py-1 pr-4 font-normal">Status</th>
+                  <th className="py-1 pr-4 font-normal">Startet</th>
+                  <th className="py-1 pr-4 font-normal">Utløst av</th>
+                  <th className="py-1 font-normal">Resultat</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {overview.recentJobs.map((job) => (
+                  <tr key={job.id} className="border-t border-border">
+                    <td className="py-1 pr-4">{label(JOB_TYPE_LABEL, job.type)}</td>
+                    <td className="py-1 pr-4">{label(JOB_STATUS_LABEL, job.status)}</td>
+                    <td className="py-1 pr-4 whitespace-nowrap">{formatDateTime(job.startedAt)}</td>
+                    <td className="py-1 pr-4">{job.trigger}</td>
+                    <td className="py-1">{job.error ? `Feil: ${job.error}` : describeJobStats(job.type, job.stats)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

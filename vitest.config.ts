@@ -11,5 +11,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // Testene skal aldri kalle Claude API, selv om nøkkelen finnes i miljøet.
+    env: { ANTHROPIC_API_KEY: "" },
   },
 });

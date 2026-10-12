@@ -22,9 +22,11 @@
     "db:reset": "prisma migrate reset --force && prisma db seed",
     "db:check": "prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code",
     "purge": "tsx scripts/purge-expired.ts",
-    "ingest": "tsx scripts/ingest.ts"
+    "ingest": "tsx scripts/ingest.ts",
+    "eval:cluster": "tsx scripts/eval-clustering.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0",
     "@mozilla/readability": "0.6.0",
     "@prisma/adapter-better-sqlite3": "7.10.0",
     "@prisma/client": "7.10.0",
@@ -34,6 +36,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "robots-parser": "3.0.1",
+    "snowball-stemmers": "0.6.0",
     "zod": "4.6.6"
   },
   "devDependencies": {

@@ -8,6 +8,7 @@ vi.mock("@/lib/ingest/pipeline", () => ({
   runPipeline: vi.fn(async () => ({
     sync: { created: 0, updated: 5, paused: 0 },
     ingest: { status: "done", jobId: "job", sources: [] },
+    cluster: { status: "skipped", reason: "En gruppering kjører allerede" },
     retention: { purgedSourceItems: 0, deletedJobRuns: 0 },
   })),
 }));
@@ -57,7 +58,7 @@ describe("POST /api/cron/ingest", () => {
     expect(runPipeline).not.toHaveBeenCalled();
   });
 
-  it("kjører innhenting og sletting med riktig token", async () => {
+  it("kjører innhenting, gruppering og sletting med riktig token", async () => {
     vi.stubEnv("CRON_SECRET", SECRET);
     const response = await POST(request(`Bearer ${SECRET}`));
     expect(response.status).toBe(200);
@@ -65,5 +66,7 @@ describe("POST /api/cron/ingest", () => {
     const body = await response.json();
     expect(body.ok).toBe(true);
     expect(body.summary[0]).toContain("Kilder synkronisert");
+    expect(body.summary).toContain("Gruppering hoppet over: En gruppering kjører allerede.");
+    expect(body.cluster).toEqual({ status: "skipped", reason: "En gruppering kjører allerede" });
   });
 });

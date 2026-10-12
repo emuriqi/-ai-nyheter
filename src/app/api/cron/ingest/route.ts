@@ -5,7 +5,7 @@ import { runPipeline } from "@/lib/ingest/pipeline";
 import { summarizePipeline } from "@/lib/ingest/summary";
 
 /**
- * Kjører innhenting og sletting. Kalles av en cron-jobb:
+ * Kjører innhenting, gruppering og sletting. Kalles av en cron-jobb:
  *
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<vert>/api/cron/ingest
  *
@@ -27,6 +27,6 @@ export async function POST(request: Request) {
   }
 
   const result = await runPipeline(getDb(), { config: siteConfig, trigger: "cron" });
-  const { lines, ingest, retention } = summarizePipeline(result);
-  return Response.json({ ok: true, summary: lines, ingest, retention });
+  const { lines, ingest, cluster, retention } = summarizePipeline(result);
+  return Response.json({ ok: true, summary: lines, ingest, cluster, retention });
 }

@@ -71,6 +71,20 @@ enum JobType {
   PURGE
 }
 
+/// Hvordan et element ble koblet til en sak.
+enum ClusterMethod {
+  /// Ingen åpen sak lignet nok, så elementet startet en ny sak.
+  NEW
+  /// Likheten var over grensen for samme sak.
+  AUTO
+  /// Likheten var i gråsonen, og Claude vurderte at det var samme sak.
+  CLAUDE
+  /// Likheten var i gråsonen, og Claude vurderte at det var en ny sak.
+  CLAUDE_NEW
+  /// Flyttet av en administrator.
+  MANUAL
+}
+
 enum JobStatus {
   RUNNING
   SUCCEEDED
@@ -122,28 +136,39 @@ model Source {
 
 /// Én artikkel eller ett element hentet fra en kilde.
 model SourceItem {
-  id          String    @id @default(cuid())
-  sourceId    String
+  id            String         @id @default(cuid())
+  sourceId      String
   /// Feedens egen id, eller URL hvis feeden mangler id. Hindrer duplikater.
-  guid        String
-  url         String
-  title       String
-  publishedAt DateTime?
-  fetchedAt   DateTime  @default(now())
+  guid          String
+  url           String
+  title         String
+  publishedAt   DateTime?
+  fetchedAt     DateTime       @default(now())
   /// Kort utdrag fra feeden. Slettes etter deleteAfter.
-  excerpt     String?
+  excerpt       String?
   /// Teksten som brukes til generering og chat. Slettes etter deleteAfter.
-  bodyText    String?
+  bodyText      String?
   /// true når kilden har reservert elementet mot tekst- og datautvinning.
   /// Da lagres bare tittel og lenke, aldri tekst.
-  tdmReserved Boolean   @default(false)
+  tdmReserved   Boolean        @default(false)
   /// Hash av teksten, brukes til å oppdage endringer. Beholdes etter sletting.
-  contentHash String?
-  language    String
+  contentHash   String?
+  language      String
   /// Tidspunkt da kildeteksten skal slettes (fetchedAt + sletteperiode).
-  deleteAfter DateTime
-  purgedAt    DateTime?
-  storyId     String?
+  deleteAfter   DateTime
+  purgedAt      DateTime?
+  storyId       String?
+  /// Når elementet ble koblet til saken, hvordan, og hvor likt det var
+  /// den mest like saken (cosinuslikhet 0–1, null hvis ingen sak var åpen).
+  clusteredAt   DateTime?
+  clusterMethod ClusterMethod?
+  clusterScore  Float?
+  /// Claudes korte begrunnelse når grupperingen ble avgjort av Claude.
+  clusterNote   String?
+  /// Når elementet startet en ny sak: den åpne saken det lignet mest på.
+  /// Vises i admin så en redaktør kan flytte elementet dit. Ingen fremmednøkkel;
+  /// saken kan ha blitt slettet siden.
+  clusterNearestStoryId String?
 
   source    Source           @relation(fields: [sourceId], references: [id], onDelete: Restrict)
   story     Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)

@@ -10,21 +10,10 @@ import { z } from "zod";
  * oppstart i stedet for å kjøre med ulovlig oppsett.
  */
 
-export const LICENSES = [
-  "NLOD-2.0",
-  "CC-BY-4.0",
-  "CC0-1.0",
-  "PUBLIC-DOMAIN",
-  "UNKNOWN",
-] as const;
+export const LICENSES = ["NLOD-2.0", "CC-BY-4.0", "CC0-1.0", "PUBLIC-DOMAIN", "UNKNOWN"] as const;
 
 /** Lisenser som tillater gjenbruk, også kommersielt, mot kreditering. */
-export const OPEN_LICENSES: ReadonlySet<License> = new Set([
-  "NLOD-2.0",
-  "CC-BY-4.0",
-  "CC0-1.0",
-  "PUBLIC-DOMAIN",
-]);
+export const OPEN_LICENSES: ReadonlySet<License> = new Set(["NLOD-2.0", "CC-BY-4.0", "CC0-1.0", "PUBLIC-DOMAIN"]);
 
 export type License = (typeof LICENSES)[number];
 
@@ -197,6 +186,39 @@ export const siteConfigSchema = z
       maxResponseBytes: z.number().int().min(10_000).max(10_000_000),
     }),
 
+    /** Gruppering av kildeelementer i saker. */
+    clustering: z
+      .object({
+        /**
+         * En sak er åpen for nye kilder så lenge det nye elementet er publisert
+         * innenfor så mange timer fra sakens første eller siste kilde.
+         */
+        storyWindowHours: z
+          .number()
+          .int()
+          .min(1)
+          .max(14 * 24),
+        /** Likhet (0–1) fra og med denne grensen regnes som samme sak. */
+        sameStoryThreshold: z.number().gt(0).lt(1),
+        /**
+         * Likhet under denne grensen regnes alltid som en ny sak. Mellom
+         * grensene er det en gråsone som Claude avgjør hvis det er slått på.
+         * Uten Claude blir elementer i gråsonen en ny sak (det trygge valget).
+         */
+        borderlineThreshold: z.number().gt(0).lt(1),
+        useClaudeForBorderline: z.boolean(),
+        /** Øvre grense for antall kall til Claude per kjøring. */
+        maxClaudeChecksPerRun: z.number().int().min(0).max(200),
+        /** Hvor mange dager med elementer som brukes til å vekte ord (IDF). */
+        idfWindowDays: z.number().int().min(1).max(90),
+        /** Største antall elementer som grupperes per kjøring. */
+        maxItemsPerRun: z.number().int().min(1).max(5000),
+      })
+      .refine((c) => c.borderlineThreshold <= c.sameStoryThreshold, {
+        message: "borderlineThreshold kan ikke være høyere enn sameStoryThreshold",
+        path: ["borderlineThreshold"],
+      }),
+
     sources: z.array(sourceConfigSchema).min(1),
   })
   .superRefine((config, ctx) => {
@@ -217,6 +239,7 @@ export type SiteConfigInput = z.input<typeof siteConfigSchema>;
 export type SiteConfig = z.output<typeof siteConfigSchema>;
 export type SourceConfig = z.output<typeof sourceConfigSchema>;
 export type IngestionConfig = SiteConfig["ingestion"];
+export type ClusteringConfig = SiteConfig["clustering"];
 
 /** Gir typehjelp i config-filen uten å validere (valideringen skjer i parseSiteConfig). */
 export function defineSiteConfig(config: SiteConfigInput): SiteConfigInput {

@@ -11,8 +11,7 @@ import { defineSiteConfig } from "@/lib/config/schema";
 export default defineSiteConfig({
   site: {
     name: "AI-nyheter",
-    description:
-      "Nøytrale nyhetssaker skrevet av kunstig intelligens, kun basert på åpne og lenkede kilder.",
+    description: "Nøytrale nyhetssaker skrevet av kunstig intelligens, kun basert på åpne og lenkede kilder.",
     url: "http://localhost:3000",
     language: "nb",
   },
@@ -53,8 +52,7 @@ export default defineSiteConfig({
     model: "claude-sonnet-5-5",
     articleLabel:
       "AI-generert: Denne artikkelen er skrevet av kunstig intelligens og bygger kun på kildene som er lenket nedenfor.",
-    chatLabel:
-      "AI-generert: Svarene skrives av kunstig intelligens og bygger kun på kildene til denne saken.",
+    chatLabel: "AI-generert: Svarene skrives av kunstig intelligens og bygger kun på kildene til denne saken.",
   },
 
   privacy: {
@@ -79,6 +77,21 @@ export default defineSiteConfig({
     maxTextChars: 20000,
     requestTimeoutMs: 15000,
     maxResponseBytes: 2_000_000,
+  },
+
+  /**
+   * Gruppering av kildeelementer i saker. Grensene er justert mot det
+   * syntetiske testkorpuset i tests/fixtures/cluster-corpus.json.
+   */
+  clustering: {
+    storyWindowHours: 72,
+    sameStoryThreshold: 0.4,
+    borderlineThreshold: 0.15,
+    // Krever ANTHROPIC_API_KEY. Uten nøkkel blir gråsoneelementer egne saker.
+    useClaudeForBorderline: true,
+    maxClaudeChecksPerRun: 30,
+    idfWindowDays: 30,
+    maxItemsPerRun: 500,
   },
 
   /**
@@ -180,8 +193,7 @@ export default defineSiteConfig({
       publisher: "Regjeringen",
       kind: "RSS",
       adapter: "rss",
-      feedUrl:
-        "https://www.regjeringen.no/no/rss/Rss/2581966/?documentType=aktuelt/nyheter&owner=709",
+      feedUrl: "https://www.regjeringen.no/no/rss/Rss/2581966/?documentType=aktuelt/nyheter&owner=709",
       homepageUrl: "https://www.regjeringen.no/",
       termsUrl: "https://www.regjeringen.no/no/om-nettstedet/",
       license: "UNKNOWN",

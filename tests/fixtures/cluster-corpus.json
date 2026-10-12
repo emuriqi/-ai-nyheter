@@ -1,0 +1,458 @@
+{
+  "_info": "SYNTETISK testkorpus for gruppering. Alle hendelser og tekster er oppdiktet og skrevet av KI-agenter i ulike kildestiler etter faktaarket under. Ikke ekte nyheter; skal aldri publiseres. 'event' er fasit: elementer med samme event er samme sak.",
+  "events": {
+    "vind-more": "Kraftig vind på kysten av Møre og Romsdal (Sunnmøre, Romsdal, Nordmøre) onsdag 7. oktober 2026. Vindkast opp mot 30 m/s ved kysten. Meteorologisk institutt sendte ut GULT farevarsel for kraftige vindkast tirsdag 6. oktober ca. kl. 08 norsk tid, og oppgraderte til ORANSJE farevarsel onsdag 7. oktober tidlig morgen. Fare for at trær velter over veier og strømbrudd, ferjesamband kan bli innstilt. Statens vegvesen stengte Atlanterhavsveien onsdag ettermiddag, flere ferjesamband på Nordmøre innstilt. Kristiansund kommune ba innbyggerne sikre løse gjenstander, og to skoler holdt stengt onsdag.",
+    "regn-agder": "Mye regn i Agder torsdag 8. oktober 2026: 60–90 mm nedbør på et døgn, mest i indre strøk. Meteorologisk institutt sendte ut GULT farevarsel for kraftig regn onsdag 7. oktober ca. kl. 12 norsk tid. NVE sendte samme dag ut ORANSJE farevarsel for flom i Agder, særlig vassdragene Otra og Mandalselva, og gult farevarsel for jordskred. Kristiansand kommune deler ut sandsekker ved to brannstasjoner.",
+    "snofokk-finnmark": "Gult farevarsel for snøfokk og kuling på Finnmarksvidda fredag 9. oktober 2026, fra fredag morgen. Dårlig sikt på E6 og fylkesvei 92, kolonnekjøring kan bli innført. Sendt ut av Meteorologisk institutt torsdag 8. oktober kveld.",
+    "kuling-utsira": "Gult farevarsel for sterk kuling til liten storm på havområdene ved Utsira (Utsira Nord og Sørvest-Norge havområde) onsdag 7. oktober 2026 og natt til torsdag. Bølgehøyde opp mot 7 meter. Gjelder havområder, ikke land. Sendt ut av Meteorologisk institutt onsdag 7. oktober ca. kl. 09 norsk tid.",
+    "barnehage-pris": "Regjeringen (Kunnskapsdepartementet) legger mandag 5. oktober 2026 fram lovproposisjon Prop. 14 L (2026–2027) om endringer i barnehageloven: maksimalprisen for en barnehageplass senkes fra 3000 til 1500 kroner i måneden fra 1. august 2027, og kommunene skal få kompensasjon gjennom rammetilskuddet (anslått 2,1 milliarder kroner årlig). Proposisjonen ble mottatt i Stortinget og fordelt til utdannings- og forskningskomiteen torsdag 8. oktober. Utdanningsdirektoratet publiserte veiledning til kommunene om hva endringen betyr for dem. KS (kommunenes organisasjon) sier kompensasjonen må dekke hele inntektstapet.",
+    "mobil-skole": "Regjeringen (Kunnskapsdepartementet) legger tirsdag 6. oktober 2026 fram lovproposisjon Prop. 15 L (2026–2027) om endringer i opplæringslova: skolene skal ha et nasjonalt forbud mot privat bruk av mobiltelefon og smartklokke i skoletiden i grunnskolen fra skoleåret 2027–2028, med unntak for elever som trenger telefonen av helsegrunner. Proposisjonen ble mottatt i Stortinget og fordelt til utdannings- og forskningskomiteen torsdag 8. oktober.",
+    "skolemat-forslag": "Representantforslag (Dokument 8) i Stortinget om å innføre et gratis daglig skolemåltid i hele grunnskolen, fremmet av stortingsrepresentanter fra et opposisjonsparti (ikke nevn navn eller parti). Mottatt og fordelt til utdannings- og forskningskomiteen fredag 9. oktober 2026.",
+    "aku-ledighet": "SSB (Statistisk sentralbyrå) publiserte tirsdag 6. oktober 2026 kl. 08 norsk tid tall fra arbeidskraftundersøkelsen (AKU): sesongjustert arbeidsledighet var 4,6 prosent i tremånedersperioden juli–september 2026, opp 0,2 prosentpoeng fra perioden april–juni. Det tilsvarer om lag 141 000 arbeidsledige. Antall sysselsatte økte med 8 000. Ledigheten steg mest blant unge 15–24 år. Arbeids- og inkluderingsdepartementet kommenterte at regjeringen følger utviklingen nøye og viste til tiltak for unge ledige.",
+    "nav-ledighet": "NAV publiserte fredag 2. oktober 2026 tall for registrert ledighet i september: 2,1 prosent av arbeidsstyrken var registrert som helt ledige hos NAV, uendret fra august. 63 500 helt ledige. Ledigheten var høyest i Agder og Oslo. (Dette er en annen statistikk enn SSBs AKU.)",
+    "kpi-sept": "SSB publiserte fredag 9. oktober 2026 kl. 08 norsk tid konsumprisindeksen (KPI) for september: tolvmånedersveksten var 3,1 prosent, opp fra 2,8 prosent i august. KPI-JAE (justert for avgifter og uten energivarer) steg 2,9 prosent. Matvarer og alkoholfrie drikkevarer steg 4,2 prosent siste tolv måneder og bidro mest til oppgangen. Strømprisene trakk ned.",
+    "kpi-aug": "SSB publiserte torsdag 10. september 2026 kl. 08 norsk tid konsumprisindeksen (KPI) for august: tolvmånedersveksten var 2,8 prosent, ned fra 3,0 prosent i juli. KPI-JAE steg 2,7 prosent. Matprisene steg 3,9 prosent siste tolv måneder. Lavere flypriser trakk ned.",
+    "boligpris": "SSB publiserte torsdag 8. oktober 2026 boligprisindeksen for 3. kvartal 2026: prisene på brukte boliger steg 1,2 prosent fra 2. kvartal og 4,8 prosent fra samme kvartal i fjor. Størst økning i Bergen og Stavanger-regionen.",
+    "eu-batteri": "EU-kommisjonen la onsdag 7. oktober 2026 fram forslag om skjerpede krav til gjenvinning av batterier: minst 70 prosent av litiumet i brukte batterier skal gjenvinnes innen 2030 (i dag 50 prosent i regelverket), og produsentansvaret utvides til elsykkelbatterier. Forslaget er merket EØS-relevant. Klima- og miljødepartementet sier Norge vil følge arbeidet og vurdere høring. Miljødirektoratet forklarer hva det kan bety for norske returordninger.",
+    "havvind-strategi": "Regjeringen (Energidepartementet) la onsdag 7. oktober 2026 fram en ny strategi for havvind: målet er å tildele areal for 10 GW havvind innen 2035, med neste utlysning for flytende havvind i området Utsira Nord i 2027. Strategien legger opp til kortere konsesjonsbehandling. NVE (Norges vassdrags- og energidirektorat) beskriver hvordan konsesjonsprosessen skal forenkles.",
+    "havvind-forslag": "Representantforslag (Dokument 8) i Stortinget om å stanse all videre tildeling av areal til havvind til konsekvensene for fiskeriene er bedre utredet. Fremmet av representanter fra et parti (ikke nevn navn eller parti). Mottatt og fordelt til energi- og miljøkomiteen fredag 9. oktober 2026. Dette er en egen sak, ikke en del av regjeringens strategi.",
+    "rassikring-vestland": "Regjeringen (Samferdselsdepartementet) kunngjorde tirsdag 6. oktober 2026 at den bevilger 250 millioner kroner ekstra til rassikring av fylkesveier i Vestland, etter flere skredhendelser i september som stengte veier i Sogn og Nordfjord. Pengene går som øremerket tilskudd til Vestland fylkeskommune, og de første tiltakene starter våren 2027. Statens vegvesen bistår med kartlegging av de mest utsatte strekningene.",
+    "fugl-rogaland": "Høypatogen fugleinfluensa (H5N1) ble påvist i en fjørfebesetning med verpehøner i Klepp kommune i Rogaland mandag 5. oktober 2026. Mattilsynet opprettet en beskyttelsessone på 3 km og en overvåkingssone på 10 km rundt gården. Om lag 20 000 høner avlives. Tirsdag 6. oktober meldte Mattilsynet at prøver fra nabobesetninger var negative, men sonene gjelder fortsatt. Landbruks- og matdepartementet sier det følger situasjonen tett. Klepp kommune informerte innbyggerne om at smitterisikoen for mennesker er svært lav.",
+    "fugl-trondelag": "Fugleinfluensa (H5N1) påvist hos en død måke funnet ved Trondheimsfjorden i Trøndelag. Veterinærinstituttet bekreftet funnet onsdag 7. oktober 2026. Det gjelder villfugl, ingen fjørfebesetninger er berørt, og det opprettes ingen soner. Mattilsynet ber publikum melde fra om døde ville fugler og ikke ta i dem.",
+    "alkohol-salgstid": "Stortinget vedtok torsdag 8. oktober 2026 endringer i alkoholloven: kommunene kan tillate salg av øl i butikk til kl. 21 på hverdager (i dag kl. 20). Saken var Prop. 9 L (2026–2027), behandlet i helse- og omsorgskomiteen. Helse- og omsorgsdepartementet opplyser at lovendringen trer i kraft 1. januar 2027 og at kommunene selv må vedta eventuelle utvidede salgstider."
+  },
+  "items": [
+    {
+      "id": "varsel-01",
+      "source": "varsel",
+      "event": "vind-more",
+      "title": "Gult farevarsel for kraftige vindkast, Møre og Romsdal",
+      "excerpt": "Onsdag lokalt kraftige vindkast, opp mot 30 m/s langs kysten fra Sunnmøre til Nordmøre. Trær kan velte og gi stengte veier og brudd i strømforsyningen. Ferjeavganger kan bli forsinket eller innstilt.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T06:12:00Z"
+    },
+    {
+      "id": "varsel-02",
+      "source": "varsel",
+      "event": "vind-more",
+      "title": "Oransje farevarsel – kraftige vindkast, Møre og Romsdal",
+      "excerpt": "Varselet er oppgradert fra gult til oransje. Onsdag svært kraftige vindkast på kysten av Sunnmøre, Romsdal og Nordmøre, i utsatte områder opp mot 30 m/s. Fare for trær over veier, strømbrudd og innstilte ferjesamband.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T04:07:00Z"
+    },
+    {
+      "id": "varsel-03",
+      "source": "varsel",
+      "event": "regn-agder",
+      "title": "Gult farevarsel – kraftig regn i Agder",
+      "excerpt": "Torsdag ventes 60–90 mm på 24 timer, mest i indre deler av fylket. Overvann kan gi oversvømmelser på veier og i lavtliggende områder.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T10:14:00Z"
+    },
+    {
+      "id": "varsel-04",
+      "source": "varsel",
+      "event": "kuling-utsira",
+      "title": "Gult farevarsel for sterk kuling til liten storm, Utsira Nord og Sørvest-Norge havområde",
+      "excerpt": "Onsdag og natt til torsdag sterk kuling, periodevis liten storm. Bølgehøyde opp mot 7 meter. Varselet gjelder havområdene.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T07:18:00Z"
+    },
+    {
+      "id": "varsel-05",
+      "source": "varsel",
+      "event": "snofokk-finnmark",
+      "title": "Gult farevarsel for snøfokk og kuling, Finnmarksvidda",
+      "excerpt": "Fra fredag morgen kuling med snøfokk på Finnmarksvidda. Til tider svært dårlig sikt på E6 og fv. 92, og kolonnekjøring kan bli satt i gang.",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T18:36:00Z"
+    },
+    {
+      "id": "etat-01",
+      "source": "etat",
+      "event": "vind-more",
+      "title": "Atlanterhavsveien stengt – flere ferjesamband innstilt på Nordmøre",
+      "excerpt": "Den sterke vinden gjør at vi har stengt Atlanterhavsveien for all trafikk. Flere ferjesamband på Nordmøre er også innstilt. Sjekk trafikkmeldingene før du kjører.",
+      "bodyText": "Vindkastene langs kysten av Møre og Romsdal er nå så kraftige at det ikke er forsvarlig å holde Atlanterhavsveien åpen. Veien er stengt inntil videre, og vi vurderer fortløpende når den kan åpnes igjen.\n\nFlere ferjesamband på Nordmøre står stille på grunn av været. Ferjeselskapene gir beskjed når avgangene kan settes i gang igjen.\n\nDet er også fare for at trær kan blåse over veibanen på andre strekninger i fylket. Kjør etter forholdene, vær forberedt på at veier kan bli stengt på kort varsel, og følg med på trafikkmeldingene på nett eller på telefon 175.\n\nVi oppdaterer når situasjonen endrer seg.",
+      "publishedAt": "2026-10-07T12:48:00Z"
+    },
+    {
+      "id": "etat-02",
+      "source": "etat",
+      "event": "regn-agder",
+      "title": "Oransje farevarsel for flom i Agder",
+      "excerpt": "NVE har sendt ut oransje farevarsel for flom i Agder torsdag, og vassdragene Otra og Mandalselva er særlig utsatt. Det er også gult farevarsel for jordskred. Det er ventet mellom 60 og 90 millimeter regn i løpet av et døgn, mest i innlandet.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T12:24:00Z"
+    },
+    {
+      "id": "etat-03",
+      "source": "etat",
+      "event": "barnehage-pris",
+      "title": "Lavere maksimalpris i barnehage – dette betyr endringen for kommunene",
+      "excerpt": "Regjeringen foreslår å halvere maksimalprisen for en barnehageplass fra august 2027. Her er en oversikt over hva forslaget betyr for kommunene som barnehagemyndighet.",
+      "bodyText": "Kunnskapsdepartementet har lagt fram en lovproposisjon med forslag om å sette ned maksimalprisen for en heltidsplass i barnehage til 1500 kroner i måneden. I dag er maksimalprisen 3000 kroner. Endringen er foreslått å gjelde fra 1. august 2027.\n\nForslaget skal behandles i Stortinget, og endelig vedtak er ikke fattet. Vi anbefaler likevel at kommunene allerede nå begynner å forberede seg, blant annet ved å gå gjennom egne betalingssatser, vedtekter og rutiner for foreldrebetaling i både kommunale og private barnehager.\n\nKommunene skal kompenseres for redusert foreldrebetaling gjennom rammetilskuddet. Departementet anslår kostnaden til om lag 2,1 milliarder kroner i året.\n\nVi oppdaterer veiledningen når Stortinget har behandlet saken.",
+      "publishedAt": "2026-10-06T09:15:00Z"
+    },
+    {
+      "id": "etat-04",
+      "source": "etat",
+      "event": "eu-batteri",
+      "title": "EU vil skjerpe kravene til gjenvinning av batterier – dette kan det bety for Norge",
+      "excerpt": "EU-kommisjonen foreslår strengere krav til hvor mye litium som skal hentes ut av brukte batterier, og vil at produsentansvaret også skal gjelde batterier til elsykler. Forslaget er merket som EØS-relevant.",
+      "bodyText": "Forslaget går ut på at minst 70 prosent av litiumet i brukte batterier skal gjenvinnes innen 2030. Dagens regelverk krever 50 prosent. I tillegg skal produsentansvaret utvides slik at også elsykkelbatterier omfattes.\n\nHvis regelverket blir tatt inn i EØS-avtalen, får det betydning for de norske returordningene for batterier. Produsenter og returselskaper kan måtte sørge for at flere elsykkelbatterier blir samlet inn, og at anleggene de bruker, klarer de nye kravene til materialgjenvinning.\n\nKlima- og miljødepartementet følger arbeidet i EU og vil vurdere om forslaget skal sendes på høring i Norge. Miljødirektoratet bidrar med faglige vurderinger underveis.",
+      "publishedAt": "2026-10-08T08:40:00Z"
+    },
+    {
+      "id": "etat-05",
+      "source": "etat",
+      "event": "havvind-strategi",
+      "title": "Ny havvindstrategi: Kortere og enklere konsesjonsbehandling",
+      "excerpt": "Regjeringens nye havvindstrategi legger opp til en raskere konsesjonsprosess for havvind, og NVE skal følge opp med en mer samordnet behandling. Målet er å tildele areal til 10 GW innen 2035, og neste utlysning gjelder flytende havvind på Utsira Nord i 2027.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T12:36:00Z"
+    },
+    {
+      "id": "etat-06",
+      "source": "etat",
+      "event": "rassikring-vestland",
+      "title": "Kartlegger rasutsatte fylkesveier i Vestland",
+      "excerpt": "Statens vegvesen skal hjelpe Vestland fylkeskommune med å finne de mest skredutsatte strekningene på fylkesveiene. Kartleggingen skal gi grunnlag for hvordan de 250 ekstra millionene til rassikring brukes, etter skredene som stengte veier i Sogn og Nordfjord i september.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T11:20:00Z"
+    },
+    {
+      "id": "etat-07",
+      "source": "etat",
+      "event": "fugl-rogaland",
+      "title": "Fugleinfluensa påvist i fjørfebesetning i Klepp",
+      "excerpt": "Mattilsynet har påvist høypatogen fugleinfluensa av typen H5N1 i en besetning med verpehøner i Klepp kommune i Rogaland. Det er opprettet en beskyttelsessone og en overvåkingssone rundt gården.",
+      "bodyText": "Om lag 20 000 verpehøner i den smittede besetningen blir avlivet for å hindre at smitten sprer seg. Mattilsynet leder arbeidet på stedet.\n\nRundt gården er det opprettet en beskyttelsessone på 3 kilometer og en overvåkingssone på 10 kilometer. I sonene gjelder egne regler for flytting av fjørfe, egg og utstyr.\n\nVi tar prøver fra andre fjørfebesetninger i området. Fjørfeholdere som ser tegn på sykdom eller økt dødelighet hos fuglene sine, må straks kontakte Mattilsynet.\n\nFugleinfluensa smitter svært sjelden til mennesker.",
+      "publishedAt": "2026-10-05T10:32:00Z"
+    },
+    {
+      "id": "etat-08",
+      "source": "etat",
+      "event": "fugl-rogaland",
+      "title": "Fugleinfluensa i Klepp: Negative prøver fra nabobesetninger",
+      "excerpt": "Prøvene fra fjørfebesetningene rundt den smittede gården i Klepp viser ikke tegn til fugleinfluensa. Beskyttelsessonen og overvåkingssonen gjelder fortsatt inntil videre.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T09:45:00Z"
+    },
+    {
+      "id": "etat-09",
+      "source": "etat",
+      "event": "fugl-trondelag",
+      "title": "Fugleinfluensa påvist hos måke ved Trondheimsfjorden",
+      "excerpt": "Veterinærinstituttet har bekreftet fugleinfluensa av typen H5N1 hos en død måke som ble funnet ved Trondheimsfjorden. Funnet gjelder villfugl, og ingen fjørfebesetninger er berørt.",
+      "bodyText": "Fordi smitten er påvist hos en vill fugl og ikke i en fjørfebesetning, blir det ikke opprettet soner.\n\nFunnet viser at viruset finnes blant ville fugler i området. Mattilsynet ber derfor publikum om å melde fra dersom de finner døde ville fugler, og om ikke å ta i dem.\n\nFjørfeholdere i Trøndelag bør være ekstra nøye med smittevern og hindre at fuglene deres kommer i kontakt med ville fugler.",
+      "publishedAt": "2026-10-07T10:12:00Z"
+    },
+    {
+      "id": "etat-10",
+      "source": "etat",
+      "event": "nav-ledighet",
+      "title": "Uendret ledighet i september",
+      "excerpt": "Ved utgangen av september var 63 500 personer registrert som helt ledige hos NAV. Det tilsvarer 2,1 prosent av arbeidsstyrken, samme nivå som i august. Ledigheten er høyest i Agder og Oslo.",
+      "bodyText": null,
+      "publishedAt": "2026-10-02T06:02:00Z"
+    },
+    {
+      "id": "departement-01",
+      "source": "departement",
+      "event": "barnehage-pris",
+      "title": "Foreslår å halvere maksprisen i barnehagen",
+      "excerpt": "Regjeringen legger i dag fram et lovforslag som reduserer den høyeste prisen for en barnehageplass til 1500 kroner i måneden. Endringen er foreslått å gjelde fra 1. august 2027.",
+      "bodyText": "Kunnskapsdepartementet har i dag lagt fram Prop. 14 L (2026–2027) med forslag til endringer i barnehageloven. Forslaget går ut på at maksimalprisen foreldre betaler for en barnehageplass, reduseres fra 3000 kroner til 1500 kroner per måned.\n\nDen nye maksprisen er foreslått å tre i kraft fra 1. august 2027, slik at familiene får lavere regning fra starten av barnehageåret.\n\nKommunene skal ikke bære kostnaden ved lavere foreldrebetaling. Regjeringen legger opp til at kommunene kompenseres gjennom rammetilskuddet. Den årlige kompensasjonen er anslått til om lag 2,1 milliarder kroner.\n\nProposisjonen skal nå behandles i Stortinget.",
+      "publishedAt": "2026-10-05T08:32:00Z"
+    },
+    {
+      "id": "departement-02",
+      "source": "departement",
+      "event": "mobil-skole",
+      "title": "Foreslår nasjonalt mobilforbud i grunnskolen",
+      "excerpt": "Regjeringen legger fram et lovforslag om forbud mot privat bruk av mobiltelefon og smartklokke i skoletiden i grunnskolen. Forbudet er foreslått å gjelde fra skoleåret 2027–2028, med unntak for elever som trenger telefonen av helsemessige årsaker.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T09:05:00Z"
+    },
+    {
+      "id": "departement-03",
+      "source": "departement",
+      "event": "aku-ledighet",
+      "title": "Følger utviklingen i arbeidsmarkedet nøye",
+      "excerpt": "Nye tall fra SSBs arbeidskraftundersøkelse viser at arbeidsledigheten økte til 4,6 prosent i perioden juli–september. Regjeringen følger utviklingen tett, særlig for unge.",
+      "bodyText": "Statistisk sentralbyrå publiserte i dag nye tall fra arbeidskraftundersøkelsen (AKU). Den sesongjusterte arbeidsledigheten var 4,6 prosent i tremånedersperioden juli–september. Det er 0,2 prosentpoeng høyere enn i perioden april–juni, og tilsvarer om lag 141 000 personer.\n\nSamtidig fortsetter sysselsettingen å vokse. Ifølge undersøkelsen var det om lag 8 000 flere sysselsatte enn i forrige periode.\n\nØkningen i ledigheten er tydeligst blant unge mellom 15 og 24 år. Arbeids- og inkluderingsdepartementet opplyser at regjeringen følger utviklingen nøye, og viser til tiltakene som allerede er rettet mot unge som står utenfor arbeidslivet.",
+      "publishedAt": "2026-10-06T10:20:00Z"
+    },
+    {
+      "id": "departement-04",
+      "source": "departement",
+      "event": "eu-batteri",
+      "title": "Vil følge EUs arbeid med strengere krav til batterigjenvinning",
+      "excerpt": "EU-kommisjonen foreslår at minst 70 prosent av litiumet i brukte batterier skal gjenvinnes innen 2030. Forslaget er merket som EØS-relevant, og Klima- og miljødepartementet vil følge arbeidet og vurdere en høring i Norge.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T13:40:00Z"
+    },
+    {
+      "id": "departement-05",
+      "source": "departement",
+      "event": "havvind-strategi",
+      "title": "Legger fram ny strategi for havvind",
+      "excerpt": "Regjeringen lanserer en ny havvindstrategi med mål om å ha tildelt areal for 10 GW havvind innen 2035. Neste utlysning blir for flytende havvind på Utsira Nord i 2027.",
+      "bodyText": "Energidepartementet har i dag lagt fram regjeringens nye strategi for havvind. Strategien setter som mål at det skal være tildelt areal for til sammen 10 GW havvind innen 2035.\n\nDen neste utlysningen er planlagt i 2027 og gjelder flytende havvind i området Utsira Nord.\n\nRegjeringen vil også korte ned tiden det tar å behandle konsesjoner for havvindprosjekter. Strategien legger opp til en enklere og raskere konsesjonsprosess. Norges vassdrags- og energidirektorat (NVE) vil gi nærmere informasjon om hvordan prosessen skal forenkles.\n\nStrategien kan leses i sin helhet på regjeringen.no.",
+      "publishedAt": "2026-10-07T08:05:00Z"
+    },
+    {
+      "id": "departement-06",
+      "source": "departement",
+      "event": "rassikring-vestland",
+      "title": "Gir 250 millioner kroner ekstra til rassikring i Vestland",
+      "excerpt": "Regjeringen bevilger 250 millioner kroner ekstra til sikring av fylkesveier i Vestland etter skredene i Sogn og Nordfjord i september.",
+      "bodyText": "I september gikk det flere skred i Sogn og Nordfjord som førte til at veier måtte stenges. Regjeringen gir nå 250 millioner kroner ekstra for å gjøre fylkesveinettet i Vestland sikrere.\n\nPengene gis som et øremerket tilskudd til Vestland fylkeskommune. De første sikringstiltakene skal etter planen starte opp våren 2027.\n\nStatens vegvesen skal bistå fylkeskommunen med å kartlegge hvilke veistrekninger som er mest utsatt, slik at midlene kan settes inn der behovet er størst.",
+      "publishedAt": "2026-10-06T07:24:00Z"
+    },
+    {
+      "id": "departement-07",
+      "source": "departement",
+      "event": "fugl-rogaland",
+      "title": "Følger utbruddet av fugleinfluensa i Rogaland tett",
+      "excerpt": "Det er påvist høypatogen fugleinfluensa i en besetning med verpehøner i Klepp kommune. Mattilsynet har opprettet restriksjonssoner rundt gården, og Landbruks- og matdepartementet følger situasjonen tett.",
+      "bodyText": null,
+      "publishedAt": "2026-10-05T14:12:00Z"
+    },
+    {
+      "id": "departement-08",
+      "source": "departement",
+      "event": "alkohol-salgstid",
+      "title": "Åpner for ølsalg i butikk til klokken 21",
+      "excerpt": "Stortinget har vedtatt endringer i alkoholloven som gir kommunene adgang til å tillate salg av øl i butikk til klokken 21 på hverdager. Lovendringen trer i kraft 1. januar 2027, men det er opp til hver enkelt kommune å vedta utvidet salgstid.",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T13:50:00Z"
+    },
+    {
+      "id": "stortinget-01",
+      "source": "stortinget",
+      "event": "barnehage-pris",
+      "title": "Endringer i barnehageloven (redusert maksimalpris for en barnehageplass)",
+      "excerpt": "Korttittel: Endringer i barnehageloven (lavere maksimalpris)\nStatus: Til behandling\nType: Lovsak\nDokumentgruppe: Proposisjon\nKomité: Utdannings- og forskningskomiteen\nEmner: Barnehager, Kommuneøkonomi, Familie og barn\nHenvisning: Prop. 14 L (2026–2027)",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T11:23:00Z"
+    },
+    {
+      "id": "stortinget-02",
+      "source": "stortinget",
+      "event": "mobil-skole",
+      "title": "Endringer i opplæringslova (forbod mot privat bruk av mobiltelefon og smartklokke i skoletida)",
+      "excerpt": "Korttittel: Endringer i opplæringslova (mobilforbud i grunnskolen)\nStatus: Mottatt\nType: Lovsak\nDokumentgruppe: Proposisjon\nKomité: Utdannings- og forskningskomiteen\nEmner: Grunnskole, Skole og utdanning\nHenvisning: Prop. 15 L (2026–2027)",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T11:47:00Z"
+    },
+    {
+      "id": "stortinget-03",
+      "source": "stortinget",
+      "event": "skolemat-forslag",
+      "title": "Representantforslag om et gratis daglig skolemåltid i grunnskolen",
+      "excerpt": "Korttittel: Gratis skolemåltid i grunnskolen\nStatus: Mottatt\nType: Alminnelig sak\nDokumentgruppe: Dokumentserien\nKomité: Utdannings- og forskningskomiteen\nEmner: Grunnskole, Folkehelse",
+      "bodyText": null,
+      "publishedAt": "2026-10-09T10:14:00Z"
+    },
+    {
+      "id": "stortinget-04",
+      "source": "stortinget",
+      "event": "havvind-forslag",
+      "title": "Representantforslag om å stanse videre tildeling av areal til havvind inntil konsekvensene for fiskeriene er tilstrekkelig utredet",
+      "excerpt": "Korttittel: Stans i tildeling av havvindareal av hensyn til fiskeriene\nStatus: Mottatt\nType: Alminnelig sak\nDokumentgruppe: Dokumentserien\nKomité: Energi- og miljøkomiteen\nEmner: Energi, Havvind, Fiskeri og havbruk",
+      "bodyText": null,
+      "publishedAt": "2026-10-09T10:38:00Z"
+    },
+    {
+      "id": "stortinget-05",
+      "source": "stortinget",
+      "event": "alkohol-salgstid",
+      "title": "Endringer i alkoholloven (utvidet salgstid for øl i butikk)",
+      "excerpt": "Korttittel: Endringer i alkoholloven (salgstid for øl)\nStatus: Behandlet\nType: Lovsak\nDokumentgruppe: Innstilling\nKomité: Helse- og omsorgskomiteen\nEmner: Alkohol og rusmidler, Kommuner, Næringsliv\nHenvisning: Prop. 9 L (2026–2027)",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T16:52:00Z"
+    },
+    {
+      "id": "statistikk-01",
+      "source": "statistikk",
+      "event": "aku-ledighet",
+      "title": "Arbeidsledigheten økte til 4,6 prosent",
+      "excerpt": "Den sesongjusterte arbeidsledigheten var 4,6 prosent i perioden juli–september, viser tall fra arbeidskraftundersøkelsen (AKU). Det er 0,2 prosentpoeng høyere enn i perioden april–juni, og økningen var størst blant de unge.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T06:00:00Z"
+    },
+    {
+      "id": "statistikk-02",
+      "source": "statistikk",
+      "event": "kpi-sept",
+      "title": "Prisveksten steg til 3,1 prosent",
+      "excerpt": "Konsumprisindeksen (KPI) steg 3,1 prosent fra september i fjor til september i år. I august var tolvmånedersveksten 2,8 prosent. Høyere matpriser bidro mest til oppgangen, mens strømprisene trakk i motsatt retning.",
+      "bodyText": null,
+      "publishedAt": "2026-10-09T06:00:00Z"
+    },
+    {
+      "id": "statistikk-03",
+      "source": "statistikk",
+      "event": "kpi-sept",
+      "title": "Matprisene 4,2 prosent høyere enn for ett år siden",
+      "excerpt": "Prisene på matvarer og alkoholfrie drikkevarer steg 4,2 prosent siste tolv måneder fram til september. Dette var gruppen som bidro mest til økningen i KPI.",
+      "bodyText": null,
+      "publishedAt": "2026-10-09T07:30:00Z"
+    },
+    {
+      "id": "statistikk-04",
+      "source": "statistikk",
+      "event": "kpi-aug",
+      "title": "Prisveksten falt til 2,8 prosent i august",
+      "excerpt": "Tolvmånedersveksten i konsumprisindeksen (KPI) var 2,8 prosent i august, mot 3,0 prosent i juli. KPI-JAE steg 2,7 prosent. Lavere priser på flyreiser bidro til å trekke prisveksten ned.",
+      "bodyText": null,
+      "publishedAt": "2026-09-10T06:00:00Z"
+    },
+    {
+      "id": "statistikk-05",
+      "source": "statistikk",
+      "event": "boligpris",
+      "title": "Boligprisene steg 1,2 prosent i 3. kvartal",
+      "excerpt": "Prisene på brukte boliger var 1,2 prosent høyere i 3. kvartal enn i kvartalet før, og 4,8 prosent høyere enn i samme kvartal i fjor. Bergen og Stavanger-regionen hadde den sterkeste prisveksten.",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T06:02:00Z"
+    },
+    {
+      "id": "kommune-01",
+      "source": "kommune",
+      "event": "vind-more",
+      "title": "Sterk vind onsdag: Sikre løse gjenstander – to skoler holder stengt",
+      "excerpt": "Meteorologisk institutt har sendt ut farevarsel for kraftige vindkast langs kysten av Møre og Romsdal. Vi ber alle i Kristiansund sikre trampoliner, hagemøbler og andre løse gjenstander allerede i kveld. To skoler i kommunen holder stengt onsdag, og foresatte får nærmere beskjed direkte fra skolen.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T17:48:00Z"
+    },
+    {
+      "id": "kommune-02",
+      "source": "kommune",
+      "event": "regn-agder",
+      "title": "Sandsekker til utdeling ved to brannstasjoner",
+      "excerpt": "Det er ventet store nedbørsmengder torsdag, og NVE har varslet fare for flom i Agder. Innbyggere som trenger å beskytte boligen sin, kan hente sandsekker ved to av kommunens brannstasjoner.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T14:23:00Z"
+    },
+    {
+      "id": "kommune-03",
+      "source": "kommune",
+      "event": "rassikring-vestland",
+      "title": "Fylkeskommunen ønsker 250 millioner til rassikring velkommen",
+      "excerpt": "Vestland får 250 millioner kroner ekstra fra staten til rassikring av fylkesveiene. Fylkeskommunen er glad for at skredutfordringene blir tatt på alvor etter en krevende september.",
+      "bodyText": "Flere skred i september førte til stengte veier i Sogn og Nordfjord, og mange innbyggere, pendlere og næringsdrivende har merket konsekvensene. Nå får fylkeskommunen 250 millioner kroner i øremerket tilskudd fra Samferdselsdepartementet til å sikre de mest utsatte strekningene.\n\nFørste steg er en grundig kartlegging. Statens vegvesen bidrar med fagkompetanse slik at vi kan finne ut hvor behovet er størst og hvor tiltakene gir mest effekt. Målet er at det første arbeidet kan starte opp våren 2027.\n\nFylkeskommunen vil informere om hvilke strekninger som blir prioritert når kartleggingen er ferdig. Bevilgningen er et viktig løft, men behovet for rassikring i fylket er fortsatt stort, og vi vil fortsette dialogen med staten om langsiktig finansiering.",
+      "publishedAt": "2026-10-06T12:34:00Z"
+    },
+    {
+      "id": "kommune-04",
+      "source": "kommune",
+      "event": "fugl-rogaland",
+      "title": "Fugleinfluensa påvist på Klepp – svært lav smitterisiko for mennesker",
+      "excerpt": "Mattilsynet har påvist fugleinfluensa i en besetning med verpehøner i kommunen. Risikoen for at mennesker blir smittet er svært lav. Alle som holder fjørfe i nærheten, må følge rådene fra Mattilsynet om sonene rundt gården.",
+      "bodyText": null,
+      "publishedAt": "2026-10-05T15:52:00Z"
+    },
+    {
+      "id": "kommune-05",
+      "source": "kommune",
+      "event": "barnehage-pris",
+      "title": "Halvert barnehagepris: Kompensasjonen må dekke hele inntektstapet",
+      "excerpt": "KS mener kommunene må få full kompensasjon når maksprisen i barnehagen halveres. Rammetilskuddet må øke nok til å dekke hele bortfallet av foreldrebetaling.",
+      "bodyText": "Regjeringen la i dag fram forslag om å senke maksimalprisen for en barnehageplass fra 3000 til 1500 kroner i måneden. Endringen skal etter planen gjelde fra 1. august 2027.\n\nIfølge regjeringen skal kommunene kompenseres med om lag 2,1 milliarder kroner i året gjennom rammetilskuddet. KS vil gå grundig gjennom beregningene. Kommunene har ansvaret for barnehagetilbudet og kan ikke bære et inntektstap som ikke er fullt finansiert.\n\nKS forventer at kompensasjonen justeres hvis det faktiske bortfallet av foreldrebetaling blir større enn anslått, og at den følges opp i årene framover. Ellers risikerer kommunene å måtte kutte i andre tjenester. KS vil følge saken videre når forslaget skal behandles i Stortinget.",
+      "publishedAt": "2026-10-05T12:41:00Z"
+    },
+    {
+      "id": "byraa-01",
+      "source": "byraa",
+      "event": "vind-more",
+      "title": "Oransje farevarsel for kraftig vind i Møre og Romsdal",
+      "excerpt": "Meteorologisk institutt har oppgradert farevarselet for kysten av Møre og Romsdal til oransje. Det ventes vindkast på opptil 30 meter i sekundet onsdag, og trær kan velte over veier. Ferjesamband kan bli innstilt.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T05:42:00Z"
+    },
+    {
+      "id": "byraa-02",
+      "source": "byraa",
+      "event": "regn-agder",
+      "title": "Oransje flomvarsel i Agder",
+      "excerpt": "NVE varsler flom i Agder, særlig i Otra og Mandalselva. Torsdag kan det komme opptil 90 millimeter regn på et døgn, og det er også sendt ut gult varsel om jordskred.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T15:18:00Z"
+    },
+    {
+      "id": "byraa-03",
+      "source": "byraa",
+      "event": "aku-ledighet",
+      "title": "Ledigheten steg til 4,6 prosent",
+      "excerpt": "Den sesongjusterte arbeidsledigheten var 4,6 prosent i perioden juli–september, viser AKU-tall fra SSB. Det er 0,2 prosentpoeng høyere enn i forrige periode, og økningen var størst blant de unge.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T06:14:00Z"
+    },
+    {
+      "id": "byraa-04",
+      "source": "byraa",
+      "event": "kpi-sept",
+      "title": "Prisveksten økte til 3,1 prosent",
+      "excerpt": "Konsumprisene var 3,1 prosent høyere i september enn samme måned i fjor, mot 2,8 prosent i august, ifølge SSB. Dyrere mat trakk mest opp, mens strømprisene bidro til å dempe veksten.",
+      "bodyText": null,
+      "publishedAt": "2026-10-09T06:12:00Z"
+    },
+    {
+      "id": "byraa-05",
+      "source": "byraa",
+      "event": "barnehage-pris",
+      "title": "Regjeringen vil halvere barnehageprisen",
+      "excerpt": "Maksprisen for en barnehageplass skal ned fra 3000 til 1500 kroner i måneden fra august 2027, foreslår regjeringen. Kommunene skal kompenseres med anslagsvis 2,1 milliarder kroner i året.",
+      "bodyText": null,
+      "publishedAt": "2026-10-05T08:47:00Z"
+    },
+    {
+      "id": "byraa-06",
+      "source": "byraa",
+      "event": "mobil-skole",
+      "title": "Regjeringen foreslår mobilforbud i grunnskolen",
+      "excerpt": "Privat bruk av mobil og smartklokke skal forbys i skoletiden i hele grunnskolen fra skoleåret 2027–2028, foreslår Kunnskapsdepartementet. Elever som trenger telefonen av helsegrunner, får unntak.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T09:03:00Z"
+    },
+    {
+      "id": "byraa-07",
+      "source": "byraa",
+      "event": "havvind-strategi",
+      "title": "Ny havvindstrategi: 10 GW skal tildeles innen 2035",
+      "excerpt": "Regjeringen har lagt fram en ny strategi for havvind. Neste utlysning for flytende havvind blir på Utsira Nord i 2027, og konsesjonsbehandlingen skal gå raskere.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T08:56:00Z"
+    },
+    {
+      "id": "byraa-08",
+      "source": "byraa",
+      "event": "fugl-rogaland",
+      "title": "Fugleinfluensa påvist på hønsegård i Klepp",
+      "excerpt": "Høypatogen fugleinfluensa er påvist hos verpehøner i Klepp i Rogaland. Rundt 20 000 høner skal avlives, og Mattilsynet har opprettet soner på 3 og 10 kilometer rundt gården.",
+      "bodyText": null,
+      "publishedAt": "2026-10-05T11:21:00Z"
+    },
+    {
+      "id": "byraa-09",
+      "source": "byraa",
+      "event": "fugl-trondelag",
+      "title": "Fugleinfluensa funnet i død måke ved Trondheimsfjorden",
+      "excerpt": "Veterinærinstituttet har bekreftet fugleinfluensa hos en død måke i Trøndelag. Ingen fjørfe er berørt. Mattilsynet ber folk melde fra om døde ville fugler og la være å ta i dem.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T11:34:00Z"
+    },
+    {
+      "id": "byraa-10",
+      "source": "byraa",
+      "event": "alkohol-salgstid",
+      "title": "Stortinget åpner for ølsalg til klokka 21",
+      "excerpt": "Butikker kan få selge øl til klokka 21 på hverdager fra nyttår, etter at Stortinget torsdag vedtok endringer i alkoholloven. Det blir opp til hver kommune å utvide salgstiden.",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T14:37:00Z"
+    }
+  ]
+}

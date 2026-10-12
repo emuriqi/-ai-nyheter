@@ -22,7 +22,7 @@ describe("runPipeline", () => {
 
   afterAll(() => cleanup());
 
-  it("synkroniserer kildene, henter, sletter utløpt tekst og oppsummerer på norsk", async () => {
+  it("synkroniserer kildene, henter, grupperer, sletter utløpt tekst og oppsummerer på norsk", async () => {
     const config = parseSiteConfig(
       validConfig({
         retention: { sourceTextDays: 10, chatLogDays: 0, jobRunDays: 90 },
@@ -70,6 +70,7 @@ describe("runPipeline", () => {
 
     const jobs = await db.jobRun.findMany({ orderBy: { type: "asc" } });
     expect(jobs.map((job) => [job.type, job.status, job.trigger])).toEqual([
+      ["CLUSTER", "SUCCEEDED", "test"],
       ["INGEST", "SUCCEEDED", "test"],
       ["PURGE", "SUCCEEDED", "test"],
     ]);
@@ -78,6 +79,7 @@ describe("runPipeline", () => {
       "Kilder synkronisert: 0 nye, 3 oppdatert, 0 satt på pause.",
       "aktiv: hentet, 3 nye, 1 for gamle",
       "sperret: sperret, robots.txt sperrer /rss",
+      "Gruppering: 4 elementer, 4 nye saker, 0 lagt til eksisterende saker, 1 usikker bør sjekkes i admin.",
       "Sletting: kildetekst fjernet fra 1 elementer, 0 gamle jobblogger slettet.",
     ]);
   });

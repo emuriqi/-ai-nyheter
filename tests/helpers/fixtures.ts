@@ -66,6 +66,15 @@ export function validConfig(overrides: Partial<SiteConfigInput> = {}): SiteConfi
       requestTimeoutMs: 5000,
       maxResponseBytes: 100_000,
     },
+    clustering: {
+      storyWindowHours: 72,
+      sameStoryThreshold: 0.4,
+      borderlineThreshold: 0.15,
+      useClaudeForBorderline: false,
+      maxClaudeChecksPerRun: 5,
+      idfWindowDays: 30,
+      maxItemsPerRun: 500,
+    },
     sources: [activeSource()],
     ...overrides,
   };
