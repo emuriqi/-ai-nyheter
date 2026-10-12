@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Syntetiske testdata. Ikke ekte nyheter. -->
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Eksempel Atom</title>
+  <id>urn:uuid:feed</id>
+  <updated>2026-10-12T08:00:00Z</updated>
+  <entry>
+    <title type="html">Atom-sak &lt;i&gt;med&lt;/i&gt; formatering</title>
+    <link rel="self" href="https://example.no/api/entry/1"/>
+    <link rel="alternate" href="https://example.no/atom/1"/>
+    <id>urn:uuid:entry-1</id>
+    <updated>2026-10-12T07:00:00Z</updated>
+    <summary>Sammendrag av saken.</summary>
+  </entry>
+  <entry>
+    <title>Atom-sak med publiseringsdato</title>
+    <link href="https://example.no/atom/2"/>
+    <id>urn:uuid:entry-2</id>
+    <published>2026-10-10T07:00:00Z</published>
+    <updated>2026-10-11T07:00:00Z</updated>
+    <content type="html">&lt;p&gt;Hele innholdet.&lt;/p&gt;</content>
+  </entry>
+</feed>

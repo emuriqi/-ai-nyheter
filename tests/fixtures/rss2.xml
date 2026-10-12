@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Syntetiske testdata. Ikke ekte nyheter. -->
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Eksempelkilde</title>
+    <link>https://example.no/</link>
+    <description>Testfeed</description>
+    <item>
+      <title>Ny statistikk om eksempeltall</title>
+      <link>https://example.no/sak/1</link>
+      <guid isPermaLink="false">sak-1</guid>
+      <pubDate>Mon, 12 Oct 2026 08:00:00 +0200</pubDate>
+      <description><![CDATA[<p>Eksempeltallet økte med <b>3 prosent</b> &amp; mer.</p><img src="https://example.no/bilde.jpg"><script>alert(1)</script>]]></description>
+    </item>
+    <item>
+      <title>Sak med full tekst i feeden</title>
+      <link>https://example.no/sak/2</link>
+      <guid>sak-2</guid>
+      <dc:date>2026-10-11T12:00:00Z</dc:date>
+      <description>Kort ingress.</description>
+      <content:encoded><![CDATA[<p>Første avsnitt av hele teksten.</p><p>Andre avsnitt.</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Gammel sak</title>
+      <link>https://example.no/sak/3</link>
+      <guid>sak-3</guid>
+      <pubDate>Tue, 01 Sep 2026 08:00:00 +0200</pubDate>
+      <description>For gammel til å hentes.</description>
+    </item>
+    <item>
+      <title>Sak uten lenke</title>
+      <guid>sak-4</guid>
+      <description>Hoppes over fordi den ikke kan lenkes.</description>
+    </item>
+    <item>
+      <title>Sak med relativ lenke og &#229;pen lisens</title>
+      <link>/sak/5</link>
+      <pubDate>ugyldig dato</pubDate>
+      <description>Lenken skal løses mot feed-adressen.</description>
+    </item>
+  </channel>
+</rss>

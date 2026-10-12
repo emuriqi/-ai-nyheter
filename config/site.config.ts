@@ -69,6 +69,18 @@ export default defineSiteConfig({
     ],
   },
 
+  ingestion: {
+    userAgent: "AI-nyheter/0.2 (+https://github.com/emuriqi/ai-nyheter)",
+    aiCrawlerTokens: ["ClaudeBot", "anthropic-ai", "GPTBot", "Google-Extended", "CCBot"],
+    minIntervalMinutes: 30,
+    maxItemsPerSource: 50,
+    maxItemAgeDays: 7,
+    maxExcerptChars: 1000,
+    maxTextChars: 20000,
+    requestTimeoutMs: 15000,
+    maxResponseBytes: 2_000_000,
+  },
+
   /**
    * Kilder. En kilde hentes bare når status er ACTIVE, og skjemaet krever da
    * åpen lisens, leste vilkår og at det ikke er funnet TDM-reservasjon.
@@ -80,7 +92,8 @@ export default defineSiteConfig({
       name: "Stortinget – saker",
       publisher: "Stortinget",
       kind: "API",
-      // Innhentingen legger til gjeldende sesjonid (f.eks. 2026-2027).
+      adapter: "stortinget-saker",
+      // Uten sesjonid gir API-et saker fra inneværende sesjon.
       feedUrl: "https://data.stortinget.no/eksport/saker?format=json",
       homepageUrl: "https://data.stortinget.no/",
       termsUrl: "https://data.stortinget.no/om-datatjenesten/bruksvilkar/",
@@ -101,6 +114,7 @@ export default defineSiteConfig({
       name: "SSB – nyheter og publiseringer",
       publisher: "Statistisk sentralbyrå",
       kind: "RSS",
+      adapter: "rss",
       feedUrl: "https://www.ssb.no/rss/",
       homepageUrl: "https://www.ssb.no/",
       termsUrl: "https://www.ssb.no/diverse/lisens",
@@ -121,6 +135,7 @@ export default defineSiteConfig({
       name: "MET Norge – farevarsler (MetAlerts)",
       publisher: "Meteorologisk institutt",
       kind: "RSS",
+      adapter: "rss",
       feedUrl: "https://api.met.no/weatherapi/metalerts/2.0/current.xml",
       homepageUrl: "https://api.met.no/weatherapi/metalerts/2.0/documentation",
       termsUrl: "https://api.met.no/doc/TermsOfService",
@@ -141,6 +156,7 @@ export default defineSiteConfig({
       name: "EU-kommisjonen – pressemeldinger",
       publisher: "Europakommisjonen",
       kind: "RSS",
+      adapter: "rss",
       feedUrl: null,
       homepageUrl: "https://ec.europa.eu/commission/presscorner/home/en",
       termsUrl: "https://commission.europa.eu/legal-notice_en",
@@ -161,6 +177,7 @@ export default defineSiteConfig({
       name: "Regjeringen – pressemeldinger",
       publisher: "Regjeringen",
       kind: "RSS",
+      adapter: "rss",
       feedUrl:
         "https://www.regjeringen.no/no/rss/Rss/2581966/?documentType=aktuelt/nyheter&owner=709",
       homepageUrl: "https://www.regjeringen.no/",

@@ -20,6 +20,9 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
         <Link href="/admin/kilder" className="hover:underline">
           Kilder
         </Link>
+        <Link href="/admin/elementer" className="hover:underline">
+          Hentede elementer
+        </Link>
       </nav>
       {children}
     </div>

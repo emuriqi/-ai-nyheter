@@ -1,0 +1,27 @@
+{
+  "respons_dato_tid": "/Date(1791800000000+0200)/",
+  "versjon": "1.6",
+  "saker_liste": [
+    {
+      "id": 99001,
+      "tittel": "Eksempelsak om endringer i en tenkt lov",
+      "korttittel": "Endringer i eksempelloven",
+      "sist_oppdatert_dato": "/Date(1791720000000+0200)/",
+      "status": "til_behandling",
+      "type": "alminneligsak",
+      "dokumentgruppe": "proposisjon",
+      "henvisning": "Prop. 1 L (2026-2027)",
+      "komite": { "id": "EKS", "navn": "Eksempelkomiteen" },
+      "emne_liste": [{ "id": 1, "navn": "Eksempelemne" }, { "id": 2, "navn": "Testing" }]
+    },
+    {
+      "id": "99002",
+      "tittel": "Eldre eksempelsak",
+      "sist_oppdatert_dato": "2026-08-01T00:00:00",
+      "status": "behandlet"
+    },
+    {
+      "tittel": "Ugyldig sak uten id"
+    }
+  ]
+}

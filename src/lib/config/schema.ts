@@ -37,6 +37,8 @@ export const sourceConfigSchema = z
     name: z.string().min(1),
     publisher: z.string().min(1),
     kind: z.enum(["RSS", "API"]),
+    /** Hvordan feeden leses: «rss» (RSS 2.0, RSS 1.0 og Atom) eller et kildespesifikt API. */
+    adapter: z.enum(["rss", "stortinget-saker"]),
     /** Adressen som hentes. Kan mangle så lenge kilden ikke er aktiv. */
     feedUrl: z.url({ protocol: /^https$/ }).nullable(),
     homepageUrl: z.url({ protocol: /^https$/ }),
@@ -166,6 +168,35 @@ export const siteConfigSchema = z
         .min(1),
     }),
 
+    /** Regler for høflig og lovlig henting. */
+    ingestion: z.object({
+      /**
+       * Identifiserer tjenesten overfor kildene, med kontaktinformasjon (krav
+       * hos bl.a. MET). Første ord før «/» brukes som navn i robots.txt.
+       */
+      userAgent: z
+        .string()
+        .regex(/^[A-Za-z0-9-]+\/\S+ /, "må starte med «Navn/versjon »")
+        .refine((ua) => /https:\/\/\S+|\S+@\S+/.test(ua), "må inneholde kontaktinformasjon (URL eller e-post)"),
+      /**
+       * Hvis robots.txt sperrer en av disse KI-crawlerne, tolkes det som en
+       * reservasjon mot tekst- og datautvinning, og kilden hoppes over.
+       */
+      aiCrawlerTokens: z.array(z.string().min(1)).min(1),
+      /** Minste tid mellom to hentinger fra samme kilde. */
+      minIntervalMinutes: z.number().int().min(5).max(1440),
+      /** Maks antall nye eller endrede elementer per kilde per kjøring. */
+      maxItemsPerSource: z.number().int().min(1).max(200),
+      /** Eldre elementer hentes ikke. */
+      maxItemAgeDays: z.number().int().min(1).max(30),
+      /** Lengste utdrag fra feeden som lagres. */
+      maxExcerptChars: z.number().int().min(100).max(2000),
+      /** Lengste brødtekst som lagres. Resten kastes. */
+      maxTextChars: z.number().int().min(500).max(50000),
+      requestTimeoutMs: z.number().int().min(1000).max(60000),
+      maxResponseBytes: z.number().int().min(10_000).max(10_000_000),
+    }),
+
     sources: z.array(sourceConfigSchema).min(1),
   })
   .superRefine((config, ctx) => {
@@ -185,6 +216,7 @@ export const siteConfigSchema = z
 export type SiteConfigInput = z.input<typeof siteConfigSchema>;
 export type SiteConfig = z.output<typeof siteConfigSchema>;
 export type SourceConfig = z.output<typeof sourceConfigSchema>;
+export type IngestionConfig = SiteConfig["ingestion"];
 
 /** Gir typehjelp i config-filen uten å validere (valideringen skjer i parseSiteConfig). */
 export function defineSiteConfig(config: SiteConfigInput): SiteConfigInput {

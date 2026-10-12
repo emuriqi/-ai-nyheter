@@ -94,6 +94,10 @@ describe("parseSiteConfig", () => {
     ["ai.chatLabel", { ai: { ...base.ai, chatLabel: "" } }],
     ["retention.chatLogDays", { retention: { ...base.retention, chatLogDays: 31 } }],
     ["sources[0].termsUrl", { sources: [activeSource({ termsUrl: "http://example.no/vilkar" })] }],
+    ["ingestion.userAgent", { ingestion: { ...base.ingestion, userAgent: "AI-nyheter/1.0 (uten kontakt)" } }],
+    ["ingestion.userAgent", { ingestion: { ...base.ingestion, userAgent: "https://example.no" } }],
+    ["ingestion.maxItemAgeDays", { ingestion: { ...base.ingestion, maxItemAgeDays: 365 } }],
+    ["sources[0].adapter", { sources: [activeSource({ adapter: "skraping" as "rss" })] }],
   ])("avviser ulovlig verdi for %s", (path, overrides) => {
     expect(errorFor({ ...base, ...overrides })).toContain(path);
   });

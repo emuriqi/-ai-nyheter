@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { getAdminOverview } from "@/lib/admin";
+import { runIngestNow } from "./actions";
 import { siteConfig } from "@/lib/config";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -7,6 +8,7 @@ import {
   JOB_STATUS_LABEL,
   JOB_TYPE_LABEL,
   SOURCE_STATUS_LABEL,
+  describeJobStats,
   label,
 } from "@/lib/labels";
 
@@ -64,7 +66,20 @@ async function Overview() {
       </section>
 
       <section>
-        <h2 className="font-semibold">Siste jobber</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-semibold">Siste jobber</h2>
+          <form action={runIngestNow}>
+            <button
+              type="submit"
+              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
+            >
+              Kjør innhenting nå
+            </button>
+          </form>
+        </div>
+        <p className="mt-1 text-sm text-muted">
+          Synkroniserer kildene, henter fra aktive kilder og sletter utløpt kildetekst. Kan ta litt tid.
+        </p>
         {overview.recentJobs.length === 0 ? (
           <p className="mt-2 text-sm text-muted">Ingen jobber er kjørt ennå.</p>
         ) : (
@@ -75,6 +90,7 @@ async function Overview() {
                 <th className="py-1 font-normal">Status</th>
                 <th className="py-1 font-normal">Startet</th>
                 <th className="py-1 font-normal">Utløst av</th>
+                <th className="py-1 font-normal">Resultat</th>
               </tr>
             </thead>
             <tbody>
@@ -84,6 +100,7 @@ async function Overview() {
                   <td className="py-1">{label(JOB_STATUS_LABEL, job.status)}</td>
                   <td className="py-1">{formatDateTime(job.startedAt)}</td>
                   <td className="py-1">{job.trigger}</td>
+                  <td className="py-1">{job.error ? `Feil: ${job.error}` : describeJobStats(job.type, job.stats)}</td>
                 </tr>
               ))}
             </tbody>

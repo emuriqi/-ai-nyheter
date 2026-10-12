@@ -17,12 +17,20 @@ Dokumentet utvides i hver fase. Det er ikke juridisk rådgivning.
 | Kildenes bilder vises aldri (`showSourceImages: false` kan ikke endres)                    | `schema.ts`                  | ✅     |
 | Kildetekst slettes etter `retention.sourceTextDays` (30 dager). Tittel og URL beholdes for kildelisten | `retention.ts`   | ✅     |
 | En kortere sletteperiode gjelder også tekst som allerede er lagret                         | `retention.ts`               | ✅     |
-| robots.txt og TDM-reservasjoner sjekkes automatisk før hver innhenting                     | Innhenting                   | Fase 2 |
+| robots.txt (RFC 9309) sjekkes før hver henting. Kan den ikke leses, hentes ingenting       | `ingest/access.ts`           | ✅     |
+| TDM-reservasjoner sjekkes før hver henting: tdmrep.json, `tdm-reservation`-header og -meta, og sperre for KI-crawlere i robots.txt | `ingest/access.ts` | ✅ |
+| Bare tekst lagres. HTML, bilder og skript fjernes, og teksten kuttes etter `maxExcerptChars` og `maxTextChars` | `ingest/text.ts` | ✅ |
+| Lenkede artikkelsider hentes bare fra kildens egne verter, og bare når robots.txt og TDM tillater det | `ingest/run.ts` | ✅ |
+| Høflig henting: User-Agent med kontaktadresse, betingede forespørsler, minste intervall og størrelsesgrense | `ingest/http.ts` | ✅ |
 | Korte, merkede og krediterte sitater (`maxQuoteWords`), ellers egne formuleringer          | Generering og moderasjon     | Fase 4 |
 | Side der rettighetshavere kan be om fjerning                                               | Kontakt / fjerning           | Fase 7 |
 
 Fakta er ikke opphavsrettslig beskyttet, men formuleringer er det. Derfor lagres bare teksten som trengs for
-generering og chat, og bare i en begrenset periode.
+generering og chat, og bare i en begrenset periode. Et element som fortsatt står i feeden, får ikke ny slettefrist
+så lenge innholdet er uendret.
+
+Kildene er åpent lisensiert, så lisensen gir uansett rett til gjenbruk. Vi respekterer likevel reservasjoner mot
+tekst- og datautvinning, og tolker en sperre for kjente KI-crawlere i robots.txt som en slik reservasjon.
 
 ## Merking av AI-innhold (EUs AI-forordning art. 50)
 

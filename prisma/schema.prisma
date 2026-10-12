@@ -80,32 +80,42 @@ enum JobStatus {
 /// En kilde fra config/site.config.ts. Konfigurasjonen er fasit, og
 /// seed-scriptet synkroniserer den hit.
 model Source {
-  id                 String       @id @default(cuid())
-  slug               String       @unique
-  name               String
-  publisher          String
-  kind               SourceKind
-  feedUrl            String?
-  homepageUrl        String
-  termsUrl           String
-  license            String
-  licenseNote        String
-  attribution        String
-  language           String
-  status             SourceStatus
+  id                  String       @id @default(cuid())
+  slug                String       @unique
+  name                String
+  publisher           String
+  kind                SourceKind
+  feedUrl             String?
+  homepageUrl         String
+  termsUrl            String
+  license             String
+  licenseNote         String
+  attribution         String
+  language            String
+  status              SourceStatus
   /// Når et menneske sist leste kildens vilkår.
-  termsReviewedAt    DateTime?
+  termsReviewedAt     DateTime?
   /// NONE_FOUND | RESERVED | UNKNOWN
-  tdmReservation     String
-  allowFullTextFetch Boolean      @default(false)
-  notes              String?
-  /// Resultat av siste automatiske robots.txt-sjekk.
-  robotsCheckedAt    DateTime?
-  robotsAllowed      Boolean?
-  lastFetchedAt      DateTime?
-  lastFetchError     String?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  tdmReservation      String
+  allowFullTextFetch  Boolean      @default(false)
+  notes               String?
+  /// Resultat av siste automatiske robots.txt-sjekk av feed-adressen.
+  robotsCheckedAt     DateTime?
+  robotsAllowed       Boolean?
+  /// Resultat av siste automatiske sjekk av TDM-reservasjon (TDMRep og
+  /// KI-crawlere i robots.txt). true betyr at kilden har reservert seg.
+  tdmCheckedAt        DateTime?
+  tdmReservationFound Boolean?
+  /// Brukes til betingede forespørsler (If-None-Match / If-Modified-Since).
+  etag                String?
+  lastModified        String?
+  /// Siste forsøk på henting, også mislykkede. Styrer minste intervall.
+  lastAttemptAt       DateTime?
+  /// Siste vellykkede henting.
+  lastFetchedAt       DateTime?
+  lastFetchError      String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   items SourceItem[]
 }

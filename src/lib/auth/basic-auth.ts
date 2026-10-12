@@ -42,6 +42,21 @@ export function isStrongToken(token: string | undefined): token is string {
   );
 }
 
+/**
+ * Sjekker «Authorization: Bearer <token>» mot en hemmelighet, f.eks.
+ * CRON_SECRET. Avslått når hemmeligheten mangler eller er svak.
+ */
+export function checkBearerToken(
+  authorizationHeader: string | null | undefined,
+  secret: string | undefined,
+): AdminAuthResult {
+  if (!isStrongToken(secret)) {
+    return "disabled";
+  }
+  const match = /^Bearer\s+(\S+)$/i.exec(authorizationHeader?.trim() ?? "");
+  return match && safeEqual(match[1], secret) ? "ok" : "unauthorized";
+}
+
 /** Sammenligning i konstant tid, også når lengdene er ulike. */
 function safeEqual(a: string, b: string): boolean {
   const hashA = createHash("sha256").update(a).digest();

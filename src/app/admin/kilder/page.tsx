@@ -63,7 +63,16 @@ async function SourceList() {
                       : "Ikke sjekket"
                   }
                 />
+                <Row
+                  term="TDM-sjekk"
+                  value={
+                    source.tdmCheckedAt
+                      ? `${source.tdmReservationFound ? "Reservasjon funnet" : "Ingen reservasjon"} (${formatDateTime(source.tdmCheckedAt)})`
+                      : "Ikke sjekket"
+                  }
+                />
                 <Row term="Henter lenket side" value={source.allowFullTextFetch ? "Ja" : "Nei"} />
+                <Row term="Sist forsøkt" value={formatDateTime(source.lastAttemptAt)} />
                 <Row term="Hentede elementer" value={String(source._count.items)} />
                 <Row term="Sist hentet" value={formatDateTime(source.lastFetchedAt)} />
                 <Row term="Kildeangivelse" value={source.attribution} />

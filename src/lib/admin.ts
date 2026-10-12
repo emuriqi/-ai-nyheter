@@ -31,6 +31,33 @@ export async function getAdminOverview() {
   };
 }
 
+/** De nyeste hentede elementene, uten selve teksten (bare lengden). */
+export async function getRecentItemsForAdmin(limit = 100) {
+  await requireAdmin();
+  await connection();
+  const items = await getDb().sourceItem.findMany({
+    orderBy: { fetchedAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      title: true,
+      url: true,
+      publishedAt: true,
+      fetchedAt: true,
+      deleteAfter: true,
+      purgedAt: true,
+      excerpt: true,
+      bodyText: true,
+      source: { select: { name: true } },
+    },
+  });
+  return items.map(({ excerpt, bodyText, ...item }) => ({
+    ...item,
+    excerptLength: excerpt?.length ?? 0,
+    bodyLength: bodyText?.length ?? 0,
+  }));
+}
+
 /** Alle kilder med antall hentede elementer. */
 export async function getSourcesForAdmin() {
   await requireAdmin();
