@@ -1,0 +1,264 @@
+// Datamodell for AI-nyheter.
+//
+// Flyt: Source -> SourceItem -> Story -> Article -> ArticleRevision.
+// Kildetekst (SourceItem.excerpt/bodyText) slettes etter en fast periode,
+// men tittel og URL beholdes slik at artikler alltid kan lenke til kildene.
+//
+// Bytte til Postgres: endre provider under og adapteren i src/lib/db.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum SourceKind {
+  RSS
+  API
+}
+
+enum SourceStatus {
+  ACTIVE
+  PAUSED
+  NEEDS_VERIFICATION
+}
+
+enum Sensitivity {
+  NORMAL
+  SENSITIVE
+}
+
+enum ArticleStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  UNPUBLISHED
+}
+
+enum RevisionType {
+  CREATED
+  NEW_SOURCES
+  CORRECTION
+  EDITORIAL
+  UNPUBLISHED
+  REPUBLISHED
+}
+
+enum Actor {
+  AI
+  ADMIN
+  SYSTEM
+}
+
+enum ModerationVerdict {
+  OK
+  FLAGGED
+}
+
+enum ModerationDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum JobType {
+  INGEST
+  CLUSTER
+  GENERATE
+  PURGE
+}
+
+enum JobStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+/// En kilde fra config/site.config.ts. Konfigurasjonen er fasit, og
+/// seed-scriptet synkroniserer den hit.
+model Source {
+  id                 String       @id @default(cuid())
+  slug               String       @unique
+  name               String
+  publisher          String
+  kind               SourceKind
+  feedUrl            String?
+  homepageUrl        String
+  termsUrl           String
+  license            String
+  licenseNote        String
+  attribution        String
+  language           String
+  status             SourceStatus
+  /// Når et menneske sist leste kildens vilkår.
+  termsReviewedAt    DateTime?
+  /// NONE_FOUND | RESERVED | UNKNOWN
+  tdmReservation     String
+  allowFullTextFetch Boolean      @default(false)
+  notes              String?
+  /// Resultat av siste automatiske robots.txt-sjekk.
+  robotsCheckedAt    DateTime?
+  robotsAllowed      Boolean?
+  lastFetchedAt      DateTime?
+  lastFetchError     String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  items SourceItem[]
+}
+
+/// Én artikkel eller ett element hentet fra en kilde.
+model SourceItem {
+  id          String    @id @default(cuid())
+  sourceId    String
+  /// Feedens egen id, eller URL hvis feeden mangler id. Hindrer duplikater.
+  guid        String
+  url         String
+  title       String
+  publishedAt DateTime?
+  fetchedAt   DateTime  @default(now())
+  /// Kort utdrag fra feeden. Slettes etter deleteAfter.
+  excerpt     String?
+  /// Teksten som brukes til generering og chat. Slettes etter deleteAfter.
+  bodyText    String?
+  /// Hash av teksten, brukes til å oppdage endringer. Beholdes etter sletting.
+  contentHash String?
+  language    String
+  /// Tidspunkt da kildeteksten skal slettes (fetchedAt + sletteperiode).
+  deleteAfter DateTime
+  purgedAt    DateTime?
+  storyId     String?
+
+  source    Source           @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  story     Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  revisions RevisionSource[]
+
+  @@unique([sourceId, guid])
+  @@index([deleteAfter, purgedAt])
+  @@index([storyId])
+}
+
+/// En sak som samler kildeartikler om det samme.
+model Story {
+  id                 String      @id @default(cuid())
+  slug               String      @unique
+  /// Intern arbeidstittel fra grupperingen. Vises ikke for lesere.
+  workingTitle       String
+  category           String?
+  sensitivity        Sensitivity @default(NORMAL)
+  /// Hvorfor saken er merket som sensitiv (liste med begrunnelser).
+  sensitivityReasons Json?
+  firstSeenAt        DateTime    @default(now())
+  lastSourceAt       DateTime    @default(now())
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  items   SourceItem[]
+  article Article?
+
+  @@index([lastSourceAt])
+}
+
+/// Den gjeldende artikkelen for en sak. Alle tidligere versjoner ligger i
+/// ArticleRevision.
+model Article {
+  id              String        @id @default(cuid())
+  storyId         String        @unique
+  title           String
+  /// Ingress
+  lede            String
+  /// Brødtekst i Markdown
+  body            String
+  version         Int           @default(1)
+  status          ArticleStatus @default(DRAFT)
+  /// Settes når en rettelse er gjort. Gir synlig «Rettet»-merking.
+  isCorrected     Boolean       @default(false)
+  /// Alltid true. Lagres eksplisitt så merkingen også finnes i data og metadata.
+  aiGenerated     Boolean       @default(true)
+  model           String
+  promptVersion   String
+  publishedAt     DateTime?
+  unpublishedAt   DateTime?
+  unpublishReason String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  story     Story             @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  revisions ArticleRevision[]
+
+  @@index([status, publishedAt])
+}
+
+/// Endringslogg. Hver versjon er et fullt øyeblikksbilde med begrunnelse.
+model ArticleRevision {
+  id            String       @id @default(cuid())
+  articleId     String
+  version       Int
+  type          RevisionType
+  title         String
+  lede          String
+  body          String
+  /// Hva som endret seg (vises i endringsloggen).
+  changeSummary String
+  /// Hvorfor det endret seg (f.eks. ny kilde eller rettelse av feil).
+  reason        String
+  createdBy     Actor
+  model         String?
+  promptVersion String?
+  createdAt     DateTime     @default(now())
+
+  article    Article           @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  sources    RevisionSource[]
+  moderation ModerationReview?
+
+  @@unique([articleId, version])
+}
+
+/// Hvilke kildeartikler en bestemt versjon bygger på.
+model RevisionSource {
+  revisionId   String
+  sourceItemId String
+
+  revision   ArticleRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  sourceItem SourceItem      @relation(fields: [sourceItemId], references: [id], onDelete: Restrict)
+
+  @@id([revisionId, sourceItemId])
+  @@index([sourceItemId])
+}
+
+/// AI-kontroll av en versjon mot kildene, og eventuell manuell avgjørelse.
+model ModerationReview {
+  id           String             @id @default(cuid())
+  revisionId   String             @unique
+  verdict      ModerationVerdict
+  /// Begrunnelser, f.eks. påstand uten kildestøtte eller navngitt privatperson.
+  reasons      Json
+  checkedBy    Actor
+  model        String?
+  decision     ModerationDecision @default(PENDING)
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime           @default(now())
+
+  revision ArticleRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@index([decision])
+}
+
+/// Logg over kjøringer av innhenting, gruppering, generering og sletting.
+model JobRun {
+  id         String    @id @default(cuid())
+  type       JobType
+  status     JobStatus @default(RUNNING)
+  /// manual | cron | script
+  trigger    String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  stats      Json?
+  error      String?
+
+  @@index([type, startedAt])
+}
