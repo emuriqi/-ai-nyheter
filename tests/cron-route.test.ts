@@ -69,4 +69,19 @@ describe("POST /api/cron/ingest", () => {
     expect(body.summary).toContain("Gruppering hoppet over: En gruppering kjører allerede.");
     expect(body.cluster).toEqual({ status: "skipped", reason: "En gruppering kjører allerede" });
   });
+
+  it("svarer 500 når grupperingen feilet, men tar med oppsummeringen", async () => {
+    vi.stubEnv("CRON_SECRET", SECRET);
+    vi.mocked(runPipeline).mockResolvedValueOnce({
+      sync: { created: 0, updated: 5, paused: 0 },
+      ingest: { status: "done", jobId: "job", sources: [] },
+      cluster: { status: "failed", reason: "disken er full" },
+      retention: { purgedSourceItems: 2, deletedJobRuns: 0 },
+    } as Awaited<ReturnType<typeof runPipeline>>);
+    const response = await POST(request(`Bearer ${SECRET}`));
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.ok).toBe(false);
+    expect(body.summary).toContain("Gruppering feilet: disken er full. Elementene grupperes i neste kjøring.");
+  });
 });

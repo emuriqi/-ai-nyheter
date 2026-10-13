@@ -2,8 +2,8 @@ import { refresh } from "next/cache";
 import { headers } from "next/headers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { redirect } from "next/navigation";
-import { detachStoryItem, moveStoryItem, runIngestNow } from "@/app/admin/actions";
-import { detachItem, ManualClusterError, moveItem } from "@/lib/cluster/manual";
+import { abortClustering, detachStoryItem, moveStoryItem, runIngestNow } from "@/app/admin/actions";
+import { detachItem, ManualClusterError, markClusteringAborted, moveItem } from "@/lib/cluster/manual";
 import { runPipeline } from "@/lib/ingest/pipeline";
 
 vi.mock("next/headers", () => ({ headers: vi.fn() }));
@@ -20,6 +20,7 @@ vi.mock("@/lib/cluster/manual", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/cluster/manual")>()),
   detachItem: vi.fn(async () => "ny-sak"),
   moveItem: vi.fn(async () => undefined),
+  markClusteringAborted: vi.fn(async () => 1),
 }));
 
 const TOKEN = "Zk7vQ2pL9xR4mN8sT1wY6bC3";
@@ -112,5 +113,28 @@ describe("admin: flytting av elementer mellom saker", () => {
     // Uventede feil vises som vanlig feilside.
     vi.mocked(detachItem).mockRejectedValueOnce(new Error("databasefeil"));
     await expect(detachStoryItem(form({ itemId: "abc" }))).rejects.toThrow("databasefeil");
+  });
+});
+
+describe("admin: «Marker som avbrutt»", () => {
+  beforeEach(() => {
+    vi.stubEnv("ADMIN_TOKEN", TOKEN);
+    vi.mocked(markClusteringAborted).mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("krever innlogging", async () => {
+    requestHeaders();
+    await expect(abortClustering()).rejects.toThrow("NEXT_HTTP_ERROR_FALLBACK;404");
+    expect(markClusteringAborted).not.toHaveBeenCalled();
+  });
+
+  it("markerer jobben og går tilbake til sakssiden", async () => {
+    requestHeaders(`Basic ${Buffer.from(`admin:${TOKEN}`).toString("base64")}`);
+    await expect(abortClustering()).rejects.toThrow("REDIRECT /admin/saker");
+    expect(markClusteringAborted).toHaveBeenCalledTimes(1);
   });
 });

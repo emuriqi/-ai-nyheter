@@ -6,7 +6,7 @@ import { siteConfig } from "@/lib/config";
 import { formatDateTime } from "@/lib/format";
 import { manualErrorMessage } from "@/lib/cluster/manual";
 import { ARTICLE_STATUS_LABEL, CLUSTER_METHOD_LABEL, label } from "@/lib/labels";
-import { detachStoryItem, moveStoryItem } from "../actions";
+import { abortClustering, detachStoryItem, moveStoryItem } from "../actions";
 
 export const metadata: Metadata = { title: "Saker" };
 
@@ -26,25 +26,49 @@ export default function AdminStoriesPage({ searchParams }: PageProps<"/admin/sak
 }
 
 async function StoryList({ searchParams }: { searchParams: PageProps<"/admin/saker">["searchParams"] }) {
-  const { stories, unclustered } = await getStoriesForAdmin();
+  const { stories, unclustered, runningCluster } = await getStoriesForAdmin();
   const { feil } = await searchParams;
   // Bare kjente koder vises. Fritekst fra adressen vises aldri.
   const error = manualErrorMessage(feil);
-  const { sameStoryThreshold, borderlineThreshold, storyWindowHours, useClaudeForBorderline } = siteConfig.clustering;
+  const { sameStoryThreshold, borderlineThreshold, storyWindowHours, maxStoryHours, useClaudeForBorderline } =
+    siteConfig.clustering;
   const claudeOn = useClaudeForBorderline && hasClaudeKey();
 
   return (
     <div>
-      <p className="mt-2 max-w-3xl text-sm text-muted">
-        Kildeelementer om samme hendelse grupperes i én sak. Likhet fra {scoreFormat.format(sameStoryThreshold)} og
-        oppover slås sammen automatisk. Mellom {scoreFormat.format(borderlineThreshold)} og{" "}
-        {scoreFormat.format(sameStoryThreshold)} er en gråsone:{" "}
-        {claudeOn
-          ? "der avgjør Claude."
-          : "Claude er ikke satt opp, så elementene blir egne saker og merkes som usikre."}{" "}
-        En sak tar imot nye kilder i {storyWindowHours} timer etter forrige kilde.
-        {unclustered > 0 && ` ${unclustered} elementer venter på neste gruppering.`}
-      </p>
+      <div className="mt-2 max-w-3xl space-y-2 text-sm text-muted">
+        <p>
+          Kildeelementer om samme hendelse grupperes i én sak. Et element slås sammen automatisk når likheten med et
+          element fra <em>en annen kilde</em> i den mest like saken er minst {scoreFormat.format(sameStoryThreshold)}.
+        </p>
+        <p>
+          Likhet mellom {scoreFormat.format(borderlineThreshold)} og {scoreFormat.format(sameStoryThreshold)}, og høy
+          likhet som bare er med elementer fra samme kilde, er en gråsone, fordi en kilde ofte bruker faste maler.{" "}
+          {claudeOn
+            ? "I gråsonen avgjør Claude."
+            : "Claude er ikke satt opp, så elementer i gråsonen blir egne saker og merkes som usikre."}
+        </p>
+        <p>
+          En sak tar imot nye kilder i {storyWindowHours} timer etter forrige kilde, og dekker høyst{" "}
+          {Math.round(maxStoryHours / 24)} døgn.
+          {unclustered > 0 && ` ${unclustered} elementer venter på neste gruppering.`}
+        </p>
+      </div>
+
+      {runningCluster && (
+        <div role="status" className="mt-4 rounded-lg border border-notice-border bg-notice p-4 text-sm">
+          <p>
+            Grupperingen har kjørt siden {formatDateTime(runningCluster.startedAt)} ({runningCluster.trigger}). Flytting
+            er sperret til den er ferdig. Har den stoppet uten å bli ferdig, for eksempel etter en omstart, kan du
+            markere den som avbrutt.
+          </p>
+          <form action={abortClustering} className="mt-2">
+            <button type="submit" className="rounded border border-border px-2 py-1 text-xs hover:border-foreground">
+              Marker som avbrutt
+            </button>
+          </form>
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="mt-4 rounded-lg border border-notice-border bg-notice p-4 text-sm">
@@ -91,8 +115,8 @@ async function StoryList({ searchParams }: { searchParams: PageProps<"/admin/sak
                           {item.clusterNote && ` – «${item.clusterNote}»`}
                           {item.nearest &&
                             (item.clusterMethod === "MANUAL"
-                              ? ` Kom fra «${item.nearest.workingTitle}».`
-                              : ` Lignet mest på «${item.nearest.workingTitle}».`)}
+                              ? `. Kom fra «${item.nearest.workingTitle}».`
+                              : `. Lignet mest på «${item.nearest.workingTitle}».`)}
                         </p>
                         {!locked && (
                           <div className="mt-2 flex flex-wrap gap-2">

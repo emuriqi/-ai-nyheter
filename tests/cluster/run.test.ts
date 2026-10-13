@@ -276,6 +276,64 @@ describe("runClusterJob", () => {
     );
   });
 
+  it("viser Claude de fire nyeste elementene i en lagret sak, uansett rekkefølgen i databasen", async () => {
+    const ids = await sourceIds(db, clusterConfig());
+    const story = await db.story.create({
+      data: {
+        slug: "flom",
+        workingTitle: "Flom",
+        firstSeenAt: new Date("2026-10-07T01:00:00Z"),
+        lastSourceAt: new Date("2026-10-07T06:00:00Z"),
+      },
+    });
+    // Lagt inn med det nyeste først.
+    for (let n = 6; n >= 1; n--) {
+      const item = await insertItem(db, ids.aktiv, {
+        guid: `nr-${n}`,
+        title: `Gult farevarsel for kraftig regn i Agder, oppdatering nr ${n}`,
+        excerpt: REGN.excerpt,
+        publishedAt: new Date(`2026-10-07T0${n}:00:00Z`),
+      });
+      await db.sourceItem.update({ where: { id: item.id }, data: { storyId: story.id, clusterMethod: "AUTO" } });
+    }
+    // Samme kilde: alltid gråsone, så dommeren kalles.
+    await insertItem(db, ids.aktiv, { ...REGN, guid: "ny", publishedAt: new Date("2026-10-07T08:00:00Z") });
+    const judge = vi.fn<StoryJudge>(async () => ({ match: null, reason: "" }));
+    await run(clusterConfig(), judgeSetup(judge));
+    expect(judge.mock.calls[0][1][0].items.map((item) => item.title.slice(-4))).toEqual([
+      "nr 3",
+      "nr 4",
+      "nr 5",
+      "nr 6",
+    ]);
+  });
+
+  it("lar ikke en sak strekke seg over mer enn maxStoryHours, også over flere kjøringer", async () => {
+    const ids = await sourceIds(db, clusterConfig());
+    // Samme tekst hver 60. time fra vekslende kilder: innenfor vinduet hver gang.
+    const sources = [ids.aktiv, ids.aktiv2];
+    for (let i = 0; i < 6; i++) {
+      await insertItem(db, sources[i % 2], {
+        ...REGN,
+        guid: `varsel-${i}`,
+        publishedAt: new Date(Date.parse("2026-09-28T00:00:00Z") + i * 60 * 3600_000),
+      });
+      await runClusterJob(db, { config: clusterConfig(), trigger: "test", now: NOW, judge: null });
+    }
+    const span = async () =>
+      (await db.story.findMany()).map(
+        (story) => (story.lastSourceAt.getTime() - story.firstSeenAt.getTime()) / 3600_000,
+      );
+    // 0–120 timer i én sak; elementet ved 180 timer ville gjort saken 180 timer lang.
+    expect(await span()).toEqual([120, 120]);
+
+    // Med et kortere tak blir det flere og kortere saker.
+    await db.sourceItem.updateMany({ data: { storyId: null } });
+    await db.story.deleteMany();
+    await runClusterJob(db, { config: clusterConfig({ maxStoryHours: 72 }), trigger: "test", now: NOW, judge: null });
+    expect(await span()).toEqual([60, 60, 60]);
+  });
+
   describe("endringer fra andre underveis", () => {
     it("hopper over et element som en annen prosess grupperte først", async () => {
       const ids = await sourceIds(db, clusterConfig());

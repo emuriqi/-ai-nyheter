@@ -26,9 +26,7 @@ describe("parseSiteConfig", () => {
 
   describe("en aktiv kilde", () => {
     it("må ha åpen lisens", () => {
-      expect(errorFor(validConfig({ sources: [activeSource({ license: "UNKNOWN" })] }))).toContain(
-        "åpen lisens",
-      );
+      expect(errorFor(validConfig({ sources: [activeSource({ license: "UNKNOWN" })] }))).toContain("åpen lisens");
     });
 
     it("må ha leste vilkår", () => {
@@ -78,6 +76,16 @@ describe("parseSiteConfig", () => {
   it("avviser sletteperiode under én dag", () => {
     const retention = { sourceTextDays: 0, chatLogDays: 0, jobRunDays: 90 };
     expect(errorFor(validConfig({ retention }))).toContain("sourceTextDays");
+  });
+
+  it("krever at grensene for grupperingen henger sammen", () => {
+    const clustering = validConfig().clustering!;
+    expect(
+      errorFor(validConfig({ clustering: { ...clustering, borderlineThreshold: 0.5, sameStoryThreshold: 0.4 } })),
+    ).toContain("borderlineThreshold kan ikke være høyere enn sameStoryThreshold");
+    expect(errorFor(validConfig({ clustering: { ...clustering, maxStoryHours: 24, storyWindowHours: 72 } }))).toContain(
+      "maxStoryHours kan ikke være kortere enn storyWindowHours",
+    );
   });
 
   const base = validConfig();

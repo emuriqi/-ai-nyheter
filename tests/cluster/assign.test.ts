@@ -77,6 +77,31 @@ describe("Clusterer", () => {
       // Likheten som lagres, er den med elementet fra den andre kilden.
       expect(placed.score).toBeCloseTo(3 / (2 * 2));
     });
+    it("slår ikke sammen automatisk med en svakere sak når en mer lik sak fra samme kilde finnes", async () => {
+      const judge = vi
+        .fn<StoryJudge>()
+        .mockResolvedValueOnce({ match: null, reason: "En annen brann." })
+        .mockResolvedValueOnce({ match: "A", reason: "Oppdatering." });
+      const c = clusterer(judge);
+      const politi = await c.place(member("p1", 0, { brann: 1, bergen: 1, boligblokk: 1, sentrum: 1 }, "politi"));
+      // En annen brann i Bergen fra en annen kilde: gråsone, og Claude sier ny sak.
+      const nrk = await c.place(
+        member("n1", 1, { brann: 1, bergen: 1, lager: 1, havn: 1, natt: 1, kai: 1, gass: 1 }, "nrk"),
+      );
+      expect(nrk).toMatchObject({ isNew: true, method: "CLAUDE_NEW" });
+      // Oppdatering fra politiet: nesten lik p1 (samme kilde), og over grensen mot n1 (annen kilde).
+      const p2 = member("p2", 2, { brann: 1, bergen: 1, boligblokk: 1, sentrum: 1, lager: 0.6 }, "politi");
+      const placed = await c.place(p2);
+      expect(judge).toHaveBeenCalledTimes(2);
+      expect(judge.mock.calls[1][1].map((cand) => cand.items[0].title)).toEqual(["p1", "n1"]);
+      expect(placed).toMatchObject({ method: "CLAUDE", story: politi.story });
+
+      // Uten Claude blir den en egen, usikker sak i stedet for å havne i feil sak.
+      const c2 = clusterer();
+      await c2.place(member("p1", 0, { brann: 1, bergen: 1, boligblokk: 1, sentrum: 1 }, "politi"));
+      await c2.place(member("n1", 1, { brann: 1, bergen: 1, lager: 1, havn: 1, natt: 1, kai: 1, gass: 1 }, "nrk"));
+      expect(await c2.place(p2)).toMatchObject({ isNew: true, method: "NEW" });
+    });
   });
 
   describe("gråsonen", () => {
@@ -134,6 +159,17 @@ describe("Clusterer", () => {
       // «B» er den nest mest like saken.
       expect(placed.story).toBe(s1.story);
       expect(placed.score).toBeCloseTo(1 / (Math.sqrt(10) * Math.sqrt(2)));
+    });
+
+    it("sender aldri mer enn tre kandidatsaker", async () => {
+      const judge = vi.fn<StoryJudge>(async () => ({ match: null, reason: "" }));
+      const c = clusterer(judge);
+      // Fire saker som alle har likhet 1/3 med det nye elementet.
+      for (const [i, extra] of ["a", "b", "c", "d"].entries()) {
+        await c.place(member(`s${i}`, 0, { flom: 1, [`${extra}1`]: 1, [`${extra}2`]: 1 }));
+      }
+      await c.place(member("ny", 1, { flom: 1, y1: 1, y2: 1 }));
+      expect(judge.mock.calls.at(-1)![1]).toHaveLength(3);
     });
 
     it("sender bare kandidater over gråsonens nedre grense", async () => {

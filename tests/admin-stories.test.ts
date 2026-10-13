@@ -71,4 +71,16 @@ describe("getStoriesForAdmin", () => {
   it("sender ikke kildeteksten til siden", async () => {
     expect(JSON.stringify(await getStoriesForAdmin())).not.toContain("Hemmelig kildetekst");
   });
+
+  it("viser en gruppering som står som RUNNING, men ikke en foreldet", async () => {
+    expect((await getStoriesForAdmin()).runningCluster).toBeNull();
+    const db = testDb.current!;
+    await db.jobRun.create({
+      data: { type: "CLUSTER", trigger: "cron", startedAt: new Date(Date.now() - 3 * 3600_000) },
+    });
+    expect((await getStoriesForAdmin()).runningCluster).toBeNull();
+    const startedAt = new Date(Date.now() - 60_000);
+    await db.jobRun.create({ data: { type: "CLUSTER", trigger: "manual", startedAt } });
+    expect((await getStoriesForAdmin()).runningCluster).toEqual({ startedAt, trigger: "manual" });
+  });
 });

@@ -113,11 +113,11 @@ export class Clusterer {
     const score = best ? best.score : null;
     const nearest = best ? best.story : null;
 
-    const auto = ranked
-      .filter((r) => r.crossSourceScore >= sameStoryThreshold)
-      .sort((a, b) => b.crossSourceScore - a.crossSourceScore)[0];
-    if (auto) {
-      return this.join(auto.story, member, "AUTO", auto.crossSourceScore);
+    // Automatisk bare til den mest like saken, og bare når likheten med en
+    // annen kilde i den saken er høy nok. Ligner elementet mest på en annen sak,
+    // er det tvil, og da avgjør gråsonen.
+    if (best && best.crossSourceScore >= sameStoryThreshold) {
+      return this.join(best.story, member, "AUTO", best.crossSourceScore);
     }
     if (best && best.score >= borderlineThreshold && judge && this.judgeCalls < maxJudgeCalls) {
       const candidates = ranked.filter((r) => r.score >= borderlineThreshold).slice(0, MAX_JUDGE_CANDIDATES);

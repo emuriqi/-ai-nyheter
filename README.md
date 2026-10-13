@@ -125,7 +125,7 @@ forskningen på Topic Detection and Tracking.
    `maxStoryHours` (7 døgn). Grensen hindrer at ulike hendelser på samme sted lenkes sammen til én sak som aldri
    lukkes.
 4. **Avgjørelsen** følger to grenser i `config/site.config.ts`:
-   - likhet fra `sameStoryThreshold` (0,40) med et element fra **en annen kilde**: samme sak
+   - likhet fra `sameStoryThreshold` (0,40) med et element fra **en annen kilde** i den mest like saken: samme sak
    - under `borderlineThreshold` (0,15): ny sak
    - alt imellom, og høy likhet som bare er med elementer fra samme kilde, er en gråsone. En kilde bruker ofte
      faste maler, så to ulike farevarsler for samme fylke kan ligne mer enn to omtaler av samme hendelse. I gråsonen
@@ -168,14 +168,24 @@ kan sendes til Claude, og ordvektene (`src/lib/cluster/eligibility.ts`).
 
 Jobben tåler at andre endrer data underveis. Er et element allerede gruppert av en annen prosess, eller er saken
 det skulle til slettet eller tatt av en samtidig slug, lagres ingenting for det elementet, og det tas i neste
-kjøring. En feil i grupperingen stopper ikke slettingen av kildetekst, som alltid kjører.
+kjøring. Transaksjonene kaster ikke ved slike forventede utfall, men rydder opp selv: SQLite-adapteren deler én
+tilkobling i prosessen, så en tilbakerulling kunne ellers tatt med seg samtidige skrivinger fra andre oppgaver. En
+feil i grupperingen stopper ikke slettingen av kildetekst, som alltid kjører, men cron-ruten svarer da 500 og
+`npm run ingest` avslutter med feilkode, så overvåking fanger det opp.
 
 Admin-siden **Saker** viser hver sak med kildene, hvordan hvert element ble gruppert, likheten og Claudes
 begrunnelse. Usikre elementer er merket og viser saken de lignet mest på, med en knapp for å flytte dem dit. Et
 element kan også skilles ut til en egen sak, og en flytting kan angres med «Flytt tilbake». Saken som blir igjen,
-får ny arbeidstittel hvis elementet den kom fra, ble flyttet ut. Det går ikke an å flytte mens grupperingen kjører,
-og saker som har fått en artikkel, kan ikke endres her; det skal gå gjennom oppdateringsflyten med endringslogg
-(fase 5).
+får ny arbeidstittel hvis elementet den kom fra, ble flyttet ut. Det går ikke an å flytte mens grupperingen kjører.
+Har en gruppering stoppet uten å bli ferdig (for eksempel ved en omstart), viser siden det, med en knapp for å
+markere den som avbrutt. Saker som har fått en artikkel, kan ikke endres her; det skal gå gjennom
+oppdateringsflyten med endringslogg (fase 5).
+
+**Kjent begrensning.** Svært korte, malpregede tekster fra *ulike* kilder om ulike hendelser på samme sted kan
+ligne nok til å slås sammen automatisk, for eksempel to ettlinjes farevarsler for samme fylke med ulik fare. I
+korpuset, der utdragene er realistisk lange, er høyeste likhet mellom ulike saker fra ulike kilder 0,32, men med
+bare titler kan den komme over 0,40. Regelen om samme kilde og taket på 7 døgn begrenser skaden, og redaktøren
+kan skille ut elementer i admin. Alle artikler krever uansett manuell godkjenning før publisering.
 
 Kall til Claude bruker `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`): hvis modellen avviser en
 forespørsel, kjører API-et den på nytt med reservemodellen Anthropic anbefaler for den typen avslag, i samme kall.

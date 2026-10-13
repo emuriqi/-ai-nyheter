@@ -16,6 +16,7 @@ export const MANUAL_ERROR_MESSAGES = {
   "ukjent-sak": "Fant ikke saken elementet skulle flyttes til.",
   "ikke-gruppert": "Elementet er ikke gruppert ennå.",
   "gruppering-kjorer": "Grupperingen kjører nå. Prøv igjen om litt.",
+  "endret-underveis": "Elementet ble endret av noe annet i mellomtiden. Se over siden og prøv igjen.",
   ugyldig: "Ugyldig element eller sak.",
 } as const;
 
@@ -39,7 +40,7 @@ export class ManualClusterError extends Error {
  * Saker som har en artikkel, endres ikke her. Kildene til en artikkel skal
  * bare endres gjennom oppdateringsflyten (fase 5), med endringslogg.
  */
-async function assertNoArticle(tx: Tx, storyId: string): Promise<void> {
+async function assertNoArticle(tx: Tx | Db, storyId: string): Promise<void> {
   const article = await tx.article.findUnique({ where: { storyId }, select: { id: true } });
   if (article) throw new ManualClusterError("har-artikkel");
 }
@@ -48,7 +49,7 @@ async function assertNoArticle(tx: Tx, storyId: string): Promise<void> {
  * Grupperingsjobben holder sakene i minnet mens den kjører. Endres de samtidig,
  * kan jobben lagre et tidsrom eller en sak som ikke stemmer lenger.
  */
-async function assertClusteringIdle(tx: Tx, now: Date): Promise<void> {
+async function assertClusteringIdle(tx: Tx | Db, now: Date): Promise<void> {
   const running = await tx.jobRun.findFirst({
     where: { type: "CLUSTER", status: "RUNNING", startedAt: { gte: new Date(now.getTime() - STALE_JOB_MS) } },
     select: { id: true },
@@ -90,7 +91,7 @@ async function refreshStory(tx: Tx, storyId: string): Promise<boolean> {
   return true;
 }
 
-async function loadItem(tx: Tx, itemId: string) {
+async function loadItem(tx: Tx | Db, itemId: string) {
   const item = await tx.sourceItem.findUnique({
     where: { id: itemId },
     select: { id: true, title: true, storyId: true, publishedAt: true, fetchedAt: true },
@@ -112,15 +113,25 @@ const manualData = (now: Date, previousStoryId: string | null) => ({
   clusterNearestStoryId: previousStoryId,
 });
 
+/*
+ * Alle kontroller som kan gi en forventet feil, gjøres før transaksjonen, og
+ * transaksjonen selv kaster ikke ved forventede utfall. SQLite-adapteren deler
+ * én tilkobling i prosessen, så en tilbakerullet transaksjon kan ta med seg
+ * skrivinger fra andre oppgaver som skjedde samtidig (for eksempel at
+ * grupperingsjobben markerer seg som ferdig). Endrer noen elementet mellom
+ * kontrollen og skrivingen, oppdages det med en betinget oppdatering, og det
+ * som allerede er skrevet, ryddes opp i samme transaksjon.
+ */
+
 /** Skiller et element ut fra saken sin, til en ny sak. Returnerer slugen til den nye saken. */
 export async function detachItem(db: Db, itemId: string, now = new Date()): Promise<string> {
-  return db.$transaction(async (tx) => {
-    await assertClusteringIdle(tx, now);
-    const item = await loadItem(tx, itemId);
-    await assertNoArticle(tx, item.storyId);
-    const others = await tx.sourceItem.count({ where: { storyId: item.storyId, id: { not: item.id } } });
-    if (others === 0) throw new ManualClusterError("alene-i-saken");
+  await assertClusteringIdle(db, now);
+  const item = await loadItem(db, itemId);
+  await assertNoArticle(db, item.storyId);
+  const others = await db.sourceItem.count({ where: { storyId: item.storyId, id: { not: item.id } } });
+  if (others === 0) throw new ManualClusterError("alene-i-saken");
 
+  const slug = await db.$transaction(async (tx) => {
     const time = new Date(itemTime(item));
     const slug = await uniqueSlug(slugify(item.title), async (s) => (await tx.story.count({ where: { slug: s } })) > 0);
     const story = await tx.story.create({
@@ -128,31 +139,56 @@ export async function detachItem(db: Db, itemId: string, now = new Date()): Prom
       select: { id: true },
     });
     // Den gamle saken har fortsatt elementer, så den kan brukes til å angre.
-    await tx.sourceItem.update({
-      where: { id: item.id },
+    const moved = await tx.sourceItem.updateMany({
+      where: { id: item.id, storyId: item.storyId },
       data: { ...manualData(now, item.storyId), storyId: story.id },
     });
+    if (moved.count === 0) {
+      await tx.story.delete({ where: { id: story.id } });
+      return null;
+    }
     await refreshStory(tx, item.storyId);
     return slug;
   });
+  if (slug === null) throw new ManualClusterError("endret-underveis");
+  return slug;
 }
 
 /** Flytter et element til en annen sak. En sak som blir tom, slettes. */
 export async function moveItem(db: Db, itemId: string, targetStoryId: string, now = new Date()): Promise<void> {
-  await db.$transaction(async (tx) => {
-    await assertClusteringIdle(tx, now);
-    const item = await loadItem(tx, itemId);
-    if (item.storyId === targetStoryId) throw new ManualClusterError("samme-sak");
-    const target = await tx.story.findUnique({ where: { id: targetStoryId }, select: { id: true } });
-    if (!target) throw new ManualClusterError("ukjent-sak");
-    await assertNoArticle(tx, item.storyId);
-    await assertNoArticle(tx, targetStoryId);
+  await assertClusteringIdle(db, now);
+  const item = await loadItem(db, itemId);
+  if (item.storyId === targetStoryId) throw new ManualClusterError("samme-sak");
+  const target = await db.story.findUnique({ where: { id: targetStoryId }, select: { id: true } });
+  if (!target) throw new ManualClusterError("ukjent-sak");
+  await assertNoArticle(db, item.storyId);
+  await assertNoArticle(db, targetStoryId);
 
-    await tx.sourceItem.update({ where: { id: item.id }, data: { ...manualData(now, null), storyId: targetStoryId } });
+  const moved = await db.$transaction(async (tx) => {
+    const updated = await tx.sourceItem.updateMany({
+      where: { id: item.id, storyId: item.storyId },
+      data: { ...manualData(now, null), storyId: targetStoryId },
+    });
+    if (updated.count === 0) return false;
     await refreshStory(tx, targetStoryId);
-    const sourceStillExists = await refreshStory(tx, item.storyId);
-    if (sourceStillExists) {
+    if (await refreshStory(tx, item.storyId)) {
       await tx.sourceItem.update({ where: { id: item.id }, data: { clusterNearestStoryId: item.storyId } });
     }
+    return true;
   });
+  if (!moved) throw new ManualClusterError("endret-underveis");
+}
+
+/**
+ * Markerer en gruppering som står som RUNNING, som avbrutt. Brukes fra admin
+ * når en kjøring har stoppet uten å bli ferdig (for eksempel ved en omstart),
+ * så flytting ikke er sperret til jobben regnes som foreldet etter 90 minutter.
+ * Kjører den likevel, merker den seg som ferdig når den er ferdig.
+ */
+export async function markClusteringAborted(db: Db, now = new Date()): Promise<number> {
+  const result = await db.jobRun.updateMany({
+    where: { type: "CLUSTER", status: "RUNNING" },
+    data: { status: "FAILED", finishedAt: now, error: "Markert som avbrutt av redaktør" },
+  });
+  return result.count;
 }

@@ -28,5 +28,7 @@ export async function POST(request: Request) {
 
   const result = await runPipeline(getDb(), { config: siteConfig, trigger: "cron" });
   const { lines, ingest, cluster, retention } = summarizePipeline(result);
-  return Response.json({ ok: true, summary: lines, ingest, cluster, retention });
+  // Slettingen har kjørt uansett, men en feilet gruppering skal synes i overvåkingen.
+  const ok = cluster.status !== "failed";
+  return Response.json({ ok, summary: lines, ingest, cluster, retention }, { status: ok ? 200 : 500 });
 }

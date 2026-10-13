@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { detachItem, moveItem } from "@/lib/cluster/manual";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { detachItem, markClusteringAborted, moveItem } from "@/lib/cluster/manual";
 import type { Db } from "@/lib/db";
 import { clusterConfig, insertItem, sourceIds } from "../helpers/cluster-db";
 import { createTestDb } from "../helpers/test-db";
@@ -126,6 +126,48 @@ describe("manuell flytting av elementer", () => {
     await expect(moveItem(db, ids.c, ids.flom, NOW)).rejects.toEqual(code("gruppering-kjorer"));
     // En gammel jobb som ble hengende, blokkerer ikke.
     await db.jobRun.updateMany({ data: { startedAt: new Date(NOW.getTime() - 24 * 3600_000) } });
+    await expect(moveItem(db, ids.c, ids.flom, NOW)).resolves.toBeUndefined();
+  });
+
+  it("åpner ingen transaksjon når kontrollene avviser endringen", async () => {
+    await db.jobRun.create({ data: { type: "CLUSTER", trigger: "cron", startedAt: new Date(NOW.getTime() - 60_000) } });
+    const transaction = vi.spyOn(db, "$transaction");
+    await expect(moveItem(db, ids.c, ids.flom, NOW)).rejects.toEqual(code("gruppering-kjorer"));
+    await expect(detachItem(db, ids.b, NOW)).rejects.toEqual(code("gruppering-kjorer"));
+    expect(transaction).not.toHaveBeenCalled();
+    transaction.mockRestore();
+  });
+
+  it.each([
+    ["skill ut", () => detachItem(db, ids.b, NOW)],
+    ["flytt", () => moveItem(db, ids.b, ids.sno, NOW)],
+  ])("%s: oppdager at elementet ble flyttet av noe annet mellom kontroll og skriving", async (_name, change) => {
+    const original = db.$transaction.bind(db) as (fn: unknown) => Promise<unknown>;
+    const other = await db.story.create({ data: { slug: "annen", workingTitle: "Annen" } });
+    vi.spyOn(db, "$transaction").mockImplementationOnce((async (fn: unknown) => {
+      await db.sourceItem.update({ where: { id: ids.b }, data: { storyId: other.id } });
+      return original(fn);
+    }) as never);
+    const storiesBefore = await db.story.count();
+
+    await expect(change()).rejects.toEqual(code("endret-underveis"));
+
+    // Ingenting er endret av forsøket: ingen ny sak, og elementet ble der det ble flyttet.
+    expect(await db.story.count()).toBe(storiesBefore);
+    expect(await db.sourceItem.findUniqueOrThrow({ where: { id: ids.b } })).toMatchObject({
+      storyId: other.id,
+      clusterMethod: "AUTO",
+    });
+    vi.restoreAllMocks();
+  });
+
+  it("kan markere en gruppering som har stoppet, som avbrutt", async () => {
+    await db.jobRun.create({ data: { type: "CLUSTER", trigger: "cron", startedAt: new Date(NOW.getTime() - 60_000) } });
+    expect(await markClusteringAborted(db, NOW)).toBe(1);
+    expect(await db.jobRun.findFirstOrThrow({ where: { type: "CLUSTER" } })).toMatchObject({
+      status: "FAILED",
+      error: "Markert som avbrutt av redaktør",
+    });
     await expect(moveItem(db, ids.c, ids.flom, NOW)).resolves.toBeUndefined();
   });
 

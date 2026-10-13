@@ -4,7 +4,7 @@ import type { SiteConfig } from "../config/schema";
 import type { Db } from "../db";
 import { truncate } from "../ingest/text";
 import { DAY_MS, failStaleJobRuns, STALE_JOB_MS } from "../retention";
-import { Clusterer, type Member, type Placement, type StoryJudge, type StoryState } from "./assign";
+import { Clusterer, type Member, type Placement, type StoryJudge } from "./assign";
 import { ANALYZABLE_ITEM } from "./eligibility";
 import { clustererOptions } from "./options";
 import { type ItemText, TermStats, termFrequencies, type TermVector, weigh } from "./features";
@@ -110,16 +110,22 @@ async function runLocked(db: Db, options: ClusterOptions): Promise<ClusterResult
   try {
     const judge = resolveJudge(options.config, options.judge);
     const stats = await cluster(db, options.config, now, judge);
-    await db.jobRun.update({
-      where: { id: job.id },
-      data: { status: "SUCCEEDED", finishedAt: new Date(), stats: stats as unknown as Prisma.InputJsonValue },
-    });
+    // Statusen skrives i en egen transaksjon, så den ikke kan havne inne i en
+    // annen transaksjon på den delte SQLite-tilkoblingen og rulles tilbake med den.
+    await db.$transaction([
+      db.jobRun.update({
+        where: { id: job.id },
+        data: { status: "SUCCEEDED", finishedAt: new Date(), stats: stats as unknown as Prisma.InputJsonValue },
+      }),
+    ]);
     return { status: "done", jobId: job.id, stats };
   } catch (error) {
-    await db.jobRun.update({
-      where: { id: job.id },
-      data: { status: "FAILED", finishedAt: new Date(), error: String(error) },
-    });
+    await db.$transaction([
+      db.jobRun.update({
+        where: { id: job.id },
+        data: { status: "FAILED", finishedAt: new Date(), error: String(error) },
+      }),
+    ]);
     throw error;
   }
 }
@@ -194,7 +200,7 @@ async function cluster(db: Db, config: SiteConfig, now: Date, judge: JudgeSetup 
       firstSeenAt: true,
       lastSourceAt: true,
       // Bare tekst som kan analyseres, sammenlignes og sendes til Claude.
-      items: { where: ANALYZABLE_ITEM, select: textSelect },
+      items: { where: ANALYZABLE_ITEM, select: textSelect, orderBy: [{ publishedAt: "asc" }, { fetchedAt: "asc" }] },
     },
   });
 
@@ -225,7 +231,8 @@ async function cluster(db: Db, config: SiteConfig, now: Date, judge: JudgeSetup 
       id: story.id,
       firstAt: story.firstSeenAt.getTime(),
       lastAt: story.lastSourceAt.getTime(),
-      members: story.items.map(toMember),
+      // Eldste først, som når saken bygges i minnet, så Claude ser de nyeste elementene.
+      members: story.items.map(toMember).sort((a, b) => a.time - b.time),
     });
   }
 
@@ -254,10 +261,15 @@ async function cluster(db: Db, config: SiteConfig, now: Date, judge: JudgeSetup 
 type PersistOutcome = "saved" | "already-clustered" | "story-gone" | "slug-taken";
 
 /**
- * Lagrer plasseringen i én transaksjon. Hvis noe er endret av en annen prosess
- * underveis (elementet er allerede gruppert, saken er slettet, eller slugen ble
- * tatt samtidig), lagres ingenting, og elementet tas i neste kjøring. Andre
- * feil stopper jobben.
+ * Lagrer plasseringen i én transaksjon. Hvis noe er endret av andre underveis
+ * (elementet er allerede gruppert, saken er slettet, eller slugen ble tatt
+ * samtidig), lagres ingenting, og elementet tas i neste kjøring. Andre feil
+ * stopper jobben.
+ *
+ * Transaksjonen kaster ikke ved forventede utfall: SQLite-adapteren deler én
+ * tilkobling i prosessen, så en tilbakerulling kan ta med seg samtidige
+ * skrivinger fra andre oppgaver. Det som allerede er skrevet, ryddes i stedet
+ * opp i samme transaksjon.
  */
 async function persist(db: Db, row: TextRow, member: Member, placement: Placement, now: Date): Promise<PersistOutcome> {
   const { story } = placement;
@@ -268,21 +280,36 @@ async function persist(db: Db, row: TextRow, member: Member, placement: Placemen
     clusterNote: placement.note ?? null,
     clusterNearestStoryId: placement.isNew ? (placement.nearest?.id ?? null) : null,
   };
+  const claim = async (tx: Prisma.TransactionClient, storyId: string) =>
+    (await tx.sourceItem.updateMany({ where: { id: row.id, storyId: null }, data: { ...itemData, storyId } })).count >
+    0;
+
   try {
-    const storyId = await db.$transaction(async (tx) => {
-      const id =
-        story.id === null ? await createStory(tx, row, member.time) : await extendStory(tx, story, member.time);
-      const claimed = await tx.sourceItem.updateMany({
-        where: { id: row.id, storyId: null },
-        data: { ...itemData, storyId: id },
+    const result = await db.$transaction(async (tx): Promise<{ outcome: PersistOutcome; id?: string }> => {
+      if (story.id === null) {
+        const id = await createStory(tx, row, member.time);
+        if (await claim(tx, id)) return { outcome: "saved", id };
+        await tx.story.delete({ where: { id } });
+        return { outcome: "already-clustered" };
+      }
+      const id = story.id;
+      // Tidsrommet regnes fra det som står i databasen, ikke fra minnet, så
+      // endringer en redaktør har gjort under kjøringen ikke overskrives.
+      const current = await tx.story.findUnique({ where: { id }, select: { firstSeenAt: true, lastSourceAt: true } });
+      if (!current) return { outcome: "story-gone" };
+      if (!(await claim(tx, id))) return { outcome: "already-clustered" };
+      await tx.story.update({
+        where: { id },
+        data: {
+          firstSeenAt: new Date(Math.min(current.firstSeenAt.getTime(), member.time)),
+          lastSourceAt: new Date(Math.max(current.lastSourceAt.getTime(), member.time)),
+        },
       });
-      if (claimed.count === 0) throw new PersistConflict("already-clustered");
-      return id;
+      return { outcome: "saved", id };
     });
-    story.id = storyId;
-    return "saved";
+    if (result.id) story.id = result.id;
+    return result.outcome;
   } catch (error) {
-    if (error instanceof PersistConflict) return error.outcome;
     // Unik slug tatt av en annen prosess i samme øyeblikk.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return "slug-taken";
     throw error;
@@ -299,31 +326,6 @@ async function createStory(tx: Prisma.TransactionClient, row: TextRow, time: num
     select: { id: true },
   });
   return created.id;
-}
-
-/**
- * Utvider sakens tidsrom med det nye elementet. Tidsrommet regnes fra det som
- * står i databasen, ikke fra minnet, så endringer en redaktør har gjort under
- * kjøringen ikke overskrives.
- */
-async function extendStory(tx: Prisma.TransactionClient, story: StoryState, time: number): Promise<string> {
-  const id = story.id!;
-  const current = await tx.story.findUnique({ where: { id }, select: { firstSeenAt: true, lastSourceAt: true } });
-  if (!current) throw new PersistConflict("story-gone");
-  await tx.story.update({
-    where: { id },
-    data: {
-      firstSeenAt: new Date(Math.min(current.firstSeenAt.getTime(), time)),
-      lastSourceAt: new Date(Math.max(current.lastSourceAt.getTime(), time)),
-    },
-  });
-  return id;
-}
-
-class PersistConflict extends Error {
-  constructor(readonly outcome: Exclude<PersistOutcome, "saved">) {
-    super(outcome);
-  }
 }
 
 const HOUR_MS = 60 * 60 * 1000;

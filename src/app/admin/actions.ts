@@ -4,7 +4,13 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { detachItem, ManualClusterError, type ManualErrorCode, moveItem } from "@/lib/cluster/manual";
+import {
+  detachItem,
+  ManualClusterError,
+  type ManualErrorCode,
+  markClusteringAborted,
+  moveItem,
+} from "@/lib/cluster/manual";
 import { siteConfig } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { runPipeline } from "@/lib/ingest/pipeline";
@@ -56,4 +62,11 @@ export async function moveStoryItem(formData: FormData): Promise<void> {
   const storyId = readId(formData, "storyId");
   if (!itemId || !storyId) redirect("/admin/saker?feil=ugyldig");
   await runManual(() => moveItem(getDb(), itemId, storyId));
+}
+
+/** «Marker som avbrutt»: for en gruppering som står som RUNNING etter at den har stoppet. */
+export async function abortClustering(): Promise<void> {
+  await requireAdmin();
+  await markClusteringAborted(getDb());
+  redirect("/admin/saker");
 }

@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { requireAdmin } from "./auth/require-admin";
 import { ANALYZABLE_ITEM } from "./cluster/eligibility";
+import { STALE_JOB_MS } from "./retention";
 import { getDb } from "./db";
 
 // Alle funksjoner her kaller requireAdmin() før de leser data.
@@ -118,8 +119,16 @@ export async function getStoriesForAdmin(limit = 50) {
   // Samme filter som grupperingen bruker, så tallet bare viser det som faktisk blir gruppert.
   const unclustered = await db.sourceItem.count({ where: { storyId: null, ...ANALYZABLE_ITEM } });
 
+  // En gruppering som kjører (eller har stoppet uten å bli ferdig) sperrer manuell flytting.
+  const runningCluster = await db.jobRun.findFirst({
+    where: { type: "CLUSTER", status: "RUNNING", startedAt: { gte: new Date(Date.now() - STALE_JOB_MS) } },
+    orderBy: { startedAt: "desc" },
+    select: { startedAt: true, trigger: true },
+  });
+
   return {
     unclustered,
+    runningCluster,
     stories: stories.map((story) => ({
       ...story,
       items: story.items.map(({ clusterNearestStoryId, ...item }) => {
