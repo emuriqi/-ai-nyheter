@@ -1,3 +1,5 @@
+import { randomBytes, randomUUID } from "node:crypto";
+
 /** Lengste slug. Lengre titler kuttes ved nærmeste bindestrek. */
 const MAX_SLUG_CHARS = 60;
 
@@ -23,14 +25,24 @@ export function slugify(title: string): string {
 }
 
 /**
- * Finner en ledig slug: først selve slugen, så med -2, -3 og så videre.
- * `exists` sjekker databasen.
+ * Finner en ledig slug: først selve slugen, så med -2 til -20, og deretter
+ * med et tilfeldig suffiks. Kaster aldri, så mange saker med samme tittel (for
+ * eksempel faste farevarsler) ikke stopper grupperingen. `exists` sjekker
+ * databasen.
  */
-export async function uniqueSlug(base: string, exists: (slug: string) => Promise<boolean>): Promise<string> {
+export async function uniqueSlug(
+  base: string,
+  exists: (slug: string) => Promise<boolean>,
+  random: () => string = () => randomBytes(3).toString("hex"),
+): Promise<string> {
   if (!(await exists(base))) return base;
-  for (let n = 2; n < 100; n++) {
+  for (let n = 2; n <= 20; n++) {
     const candidate = `${base}-${n}`;
     if (!(await exists(candidate))) return candidate;
   }
-  throw new Error(`Fant ingen ledig slug for «${base}»`);
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const candidate = `${base}-${random()}`;
+    if (!(await exists(candidate))) return candidate;
+  }
+  return `${base}-${randomUUID()}`;
 }

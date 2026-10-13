@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import { requireAdmin } from "./auth/require-admin";
+import { ANALYZABLE_ITEM } from "./cluster/eligibility";
 import { getDb } from "./db";
 
 // Alle funksjoner her kaller requireAdmin() før de leser data.
@@ -114,7 +115,8 @@ export async function getStoriesForAdmin(limit = 50) {
   });
   const nearestById = new Map(nearest.map((s) => [s.id, s]));
 
-  const unclustered = await db.sourceItem.count({ where: { storyId: null, tdmReserved: false, purgedAt: null } });
+  // Samme filter som grupperingen bruker, så tallet bare viser det som faktisk blir gruppert.
+  const unclustered = await db.sourceItem.count({ where: { storyId: null, ...ANALYZABLE_ITEM } });
 
   return {
     unclustered,

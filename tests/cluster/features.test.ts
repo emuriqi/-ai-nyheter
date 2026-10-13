@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cosine, properNouns, TermStats, termFrequencies, tokenize, weigh } from "@/lib/cluster/features";
+import { cosine, TermStats, termFrequencies, tokenize, weigh } from "@/lib/cluster/features";
 import { slugify, uniqueSlug } from "@/lib/cluster/slug";
 
 describe("tokenize", () => {
@@ -36,14 +36,12 @@ describe("tokenize", () => {
     ]);
   });
 
-  it("beholder starten av en tittel med kolon", () => {
-    expect(tokenize("Fugleinfluensa i Klepp: nye prøver negative")).toEqual([
-      "fugleinfluens",
-      "klepp",
-      "nye",
-      "prøv",
-      "negativ",
-    ]);
+  it.each([
+    ["Fugleinfluensa i Klepp: nye prøver negative", ["fugleinfluens", "klepp", "nye", "prøv", "negativ"]],
+    ["Statsbudsjettet: mer til skole", ["statsbudsjett", "mer", "skol"]],
+    ["Ny strategi: kortere køer", ["ny", "strategi", "korter", "køer"]],
+  ])("beholder starten av en enkelt linje med kolon: %s", (text, expected) => {
+    expect(tokenize(text)).toEqual(expected);
   });
 
   it("ignorerer lenker", () => {
@@ -51,32 +49,20 @@ describe("tokenize", () => {
   });
 });
 
-describe("properNouns", () => {
-  it("finner navn midt i setninger, men ikke ord først i en setning", () => {
-    expect(
-      properNouns("Gult farevarsel for Møre og Romsdal. Mattilsynet har påvist H5N1 i Klepp (Rogaland) – NVE varsler."),
-    ).toEqual(["Møre", "Romsdal", "H5N1", "Klepp", "Rogaland", "NVE"]);
-  });
-
-  it("teller ikke ord etter kolon eller linjeskift", () => {
-    expect(properNouns("Ny strategi: Kortere behandling\nStatus: Mottatt")).toEqual([]);
-  });
-});
-
 describe("TF-IDF og cosinuslikhet", () => {
   const a = termFrequencies({
     title: "Fugleinfluensa påvist i Klepp",
-    excerpt: "Mattilsynet har opprettet soner.",
-    bodyText: null,
+    excerpt: "Mattilsynet har opprettet soner rundt Klepp.",
+    bodyText: "Prøver tas i Klepp.",
   });
   const b = termFrequencies({ title: "Fugleinfluensa i Klepp: nye prøver negative", excerpt: null, bodyText: null });
   const c = termFrequencies({ title: "Boligprisene steg i tredje kvartal", excerpt: null, bodyText: null });
   const stats = new TermStats([a, b, c]);
 
-  it("gir tittelen dobbel vekt og egennavn ekstra vekt", () => {
-    // «Klepp» står i tittelen (2) og er et egennavn (2 til).
-    expect(a.get("klepp")).toBe(4);
+  it("vekter tittel 2, utdrag 1 og brødtekst 0,5, uten ekstra vekt for egennavn", () => {
+    expect(a.get("klepp")).toBe(2 + 1 + 0.5);
     expect(a.get("son")).toBe(1);
+    expect(a.get("prøv")).toBe(0.5);
   });
 
   it("vekter sjeldne ord høyere enn vanlige", () => {
@@ -119,10 +105,30 @@ describe("slugify", () => {
   it("gir «sak» når tittelen ikke har bokstaver eller tall", () => {
     expect(slugify("«»–!")).toBe("sak");
   });
+});
 
-  it("finner en ledig variant", async () => {
+describe("uniqueSlug", () => {
+  it("finner en ledig nummerert variant", async () => {
     const taken = new Set(["sak", "sak-2"]);
     expect(await uniqueSlug("sak", async (s) => taken.has(s))).toBe("sak-3");
     expect(await uniqueSlug("ny", async (s) => taken.has(s))).toBe("ny");
+  });
+
+  it("bruker et tilfeldig suffiks når de nummererte er brukt opp, og kaster aldri", async () => {
+    const taken = new Set(["varsel", ...Array.from({ length: 19 }, (_, i) => `varsel-${i + 2}`)]);
+    expect(
+      await uniqueSlug(
+        "varsel",
+        async (s) => taken.has(s),
+        () => "a1b2c3",
+      ),
+    ).toBe("varsel-a1b2c3");
+    // Selv når alt ser opptatt ut, gis en unik slug i stedet for en feil.
+    const slug = await uniqueSlug(
+      "varsel",
+      async () => true,
+      () => "fast",
+    );
+    expect(slug).toMatch(/^varsel-[0-9a-f-]{36}$/);
   });
 });

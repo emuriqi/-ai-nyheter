@@ -4,7 +4,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { detachItem, ManualClusterError, moveItem } from "@/lib/cluster/manual";
+import { detachItem, ManualClusterError, type ManualErrorCode, moveItem } from "@/lib/cluster/manual";
 import { siteConfig } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { runPipeline } from "@/lib/ingest/pipeline";
@@ -25,32 +25,35 @@ function readId(formData: FormData, field: string): string | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** Kjører en manuell endring og gjør forventede feil om til en melding på siden. */
-async function runManual(change: () => Promise<unknown>): Promise<void> {
-  let message: string | null = null;
+/**
+ * Kjører en manuell endring og går tilbake til sakssiden. Forventede feil
+ * sendes som en kode (?feil=har-artikkel), som siden slår opp i en fast liste.
+ * Etter en vellykket endring fjernes en eventuell gammel feilmelding fra adressen.
+ */
+async function runManual(change: () => Promise<unknown>): Promise<never> {
+  let code: ManualErrorCode | null = null;
   try {
     await change();
   } catch (error) {
     if (!(error instanceof ManualClusterError)) throw error;
-    message = error.message;
+    code = error.code;
   }
-  if (message) redirect(`/admin/saker?feil=${encodeURIComponent(message)}`);
-  refresh();
+  redirect(code ? `/admin/saker?feil=${code}` : "/admin/saker");
 }
 
 /** «Skill ut»: flytter et element fra saken sin til en ny sak. */
 export async function detachStoryItem(formData: FormData): Promise<void> {
   await requireAdmin();
   const itemId = readId(formData, "itemId");
-  if (!itemId) redirect(`/admin/saker?feil=${encodeURIComponent("Ugyldig element.")}`);
+  if (!itemId) redirect("/admin/saker?feil=ugyldig");
   await runManual(() => detachItem(getDb(), itemId));
 }
 
-/** «Flytt dit»: flytter et element til saken det lignet mest på. */
+/** «Flytt»: flytter et element til en annen sak (den det lignet mest på, eller tilbake). */
 export async function moveStoryItem(formData: FormData): Promise<void> {
   await requireAdmin();
   const itemId = readId(formData, "itemId");
   const storyId = readId(formData, "storyId");
-  if (!itemId || !storyId) redirect(`/admin/saker?feil=${encodeURIComponent("Ugyldig element eller sak.")}`);
+  if (!itemId || !storyId) redirect("/admin/saker?feil=ugyldig");
   await runManual(() => moveItem(getDb(), itemId, storyId));
 }

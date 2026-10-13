@@ -1,10 +1,12 @@
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { type ClaudeUsage, createClaudeClient } from "../ai/claude";
 import type { SiteConfig } from "../config/schema";
 import type { Db } from "../db";
 import { truncate } from "../ingest/text";
 import { DAY_MS, failStaleJobRuns, STALE_JOB_MS } from "../retention";
-import { Clusterer, type Member, type Placement, type StoryJudge } from "./assign";
+import { Clusterer, type Member, type Placement, type StoryJudge, type StoryState } from "./assign";
+import { ANALYZABLE_ITEM } from "./eligibility";
+import { clustererOptions } from "./options";
 import { type ItemText, TermStats, termFrequencies, type TermVector, weigh } from "./features";
 import { createClaudeJudge } from "./judge";
 import { slugify, uniqueSlug } from "./slug";
@@ -25,7 +27,11 @@ export type ClusterStats = {
    * Disse bør en redaktør se på.
    */
   uncertain: number;
-  /** Elementer en annen prosess rakk å gruppere først. */
+  /**
+   * Elementer som ikke ble lagret i denne kjøringen: en annen prosess rakk å
+   * gruppere dem først, eller saken de skulle til ble endret eller slettet
+   * underveis. De som fortsatt mangler sak, tas i neste kjøring.
+   */
   skipped: number;
   claude: ClaudeUsage | null;
   promptVersion: string | null;
@@ -33,7 +39,9 @@ export type ClusterStats = {
 
 export type ClusterResult =
   | { status: "skipped"; reason: string }
-  | { status: "done"; jobId: string; stats: ClusterStats };
+  | { status: "done"; jobId: string; stats: ClusterStats }
+  /** Bare fra runPipeline, som fanger feilen så slettingen likevel kjører. */
+  | { status: "failed"; reason: string };
 
 export type JudgeSetup = { judge: StoryJudge; usage: ClaudeUsage; promptVersion?: string };
 
@@ -74,11 +82,20 @@ export async function runClusterJob(db: Db, options: ClusterOptions): Promise<Cl
   }
 }
 
+/**
+ * Finner dommeren for gråsonen. Kan Claude ikke settes opp (for eksempel fordi
+ * promptfilen mangler), grupperes det uten Claude, som når nøkkelen mangler.
+ */
 export function resolveJudge(config: SiteConfig, judge: JudgeSetup | null | undefined): JudgeSetup | null {
   if (judge !== undefined) return judge;
   if (!config.clustering.useClaudeForBorderline || config.clustering.maxClaudeChecksPerRun === 0) return null;
-  const client = createClaudeClient();
-  return client ? createClaudeJudge(client, config.ai.model) : null;
+  try {
+    const client = createClaudeClient();
+    return client ? createClaudeJudge(client, config.ai.model) : null;
+  } catch (error) {
+    console.warn(`Grupperer uten Claude: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
 }
 
 async function runLocked(db: Db, options: ClusterOptions): Promise<ClusterResult> {
@@ -90,8 +107,8 @@ async function runLocked(db: Db, options: ClusterOptions): Promise<ClusterResult
   if (running) return { status: "skipped", reason: "En gruppering kjører allerede" };
 
   const job = await db.jobRun.create({ data: { type: "CLUSTER", trigger: options.trigger, startedAt: now } });
-  const judge = resolveJudge(options.config, options.judge);
   try {
+    const judge = resolveJudge(options.config, options.judge);
     const stats = await cluster(db, options.config, now, judge);
     await db.jobRun.update({
       where: { id: job.id },
@@ -109,6 +126,7 @@ async function runLocked(db: Db, options: ClusterOptions): Promise<ClusterResult
 
 const textSelect = {
   id: true,
+  sourceId: true,
   title: true,
   excerpt: true,
   bodyText: true,
@@ -117,6 +135,7 @@ const textSelect = {
 } as const;
 type TextRow = {
   id: string;
+  sourceId: string;
   title: string;
   excerpt: string | null;
   bodyText: string | null;
@@ -139,7 +158,7 @@ function itemText(row: TextRow): ItemText {
 
 async function cluster(db: Db, config: SiteConfig, now: Date, judge: JudgeSetup | null): Promise<ClusterStats> {
   const settings = config.clustering;
-  const windowMs = settings.storyWindowHours * 60 * 60 * 1000;
+  const windowMs = settings.storyWindowHours * HOUR_MS;
   const stats: ClusterStats = {
     considered: 0,
     newStories: 0,
@@ -155,7 +174,7 @@ async function cluster(db: Db, config: SiteConfig, now: Date, judge: JudgeSetup 
   // Eldste først, så sakene bygges opp i den rekkefølgen kildene kom.
   const candidates = (
     await db.sourceItem.findMany({
-      where: { storyId: null, purgedAt: null, tdmReserved: false, source: { status: "ACTIVE" } },
+      where: { storyId: null, ...ANALYZABLE_ITEM },
       orderBy: { fetchedAt: "asc" },
       take: settings.maxItemsPerRun,
       select: textSelect,
@@ -174,13 +193,14 @@ async function cluster(db: Db, config: SiteConfig, now: Date, judge: JudgeSetup 
       id: true,
       firstSeenAt: true,
       lastSourceAt: true,
-      items: { where: { tdmReserved: false }, select: textSelect },
+      // Bare tekst som kan analyseres, sammenlignes og sendes til Claude.
+      items: { where: ANALYZABLE_ITEM, select: textSelect },
     },
   });
 
   // Ordvekter fra nyere elementer, pluss alle elementene som skal sammenlignes.
   const reference = await db.sourceItem.findMany({
-    where: { tdmReserved: false, fetchedAt: { gte: new Date(now.getTime() - settings.idfWindowDays * DAY_MS) } },
+    where: { ...ANALYZABLE_ITEM, fetchedAt: { gte: new Date(now.getTime() - settings.idfWindowDays * DAY_MS) } },
     orderBy: { fetchedAt: "desc" },
     take: MAX_REFERENCE_ITEMS,
     select: textSelect,
@@ -192,19 +212,15 @@ async function cluster(db: Db, config: SiteConfig, now: Date, judge: JudgeSetup 
   const termStats = new TermStats(frequencies.values());
   const toMember = (row: TextRow): Member => ({
     id: row.id,
+    sourceId: row.sourceId,
     time: itemTime(row),
     vector: weigh(frequencies.get(row.id)!, termStats),
     text: itemText(row),
   });
 
-  const clusterer = new Clusterer({
-    windowMs,
-    sameStoryThreshold: settings.sameStoryThreshold,
-    borderlineThreshold: settings.borderlineThreshold,
-    judge: judge?.judge ?? null,
-    maxJudgeCalls: settings.maxClaudeChecksPerRun,
-  });
-  for (const story of openStories) {
+  const clusterer = new Clusterer(clustererOptions(settings, judge?.judge ?? null));
+  // En sak uten elementer som kan analyseres, kan ikke sammenlignes og er ikke kandidat.
+  for (const story of openStories.filter((s) => s.items.length > 0)) {
     clusterer.addStory({
       id: story.id,
       firstAt: story.firstSeenAt.getTime(),
@@ -216,10 +232,11 @@ async function cluster(db: Db, config: SiteConfig, now: Date, judge: JudgeSetup 
   for (const row of candidates) {
     const member = toMember(row);
     const placement = await clusterer.place(member);
-    const saved = await persist(db, row, member, placement, now);
-    if (!saved) {
-      // En annen prosess grupperte elementet først.
+    const outcome = await persist(db, row, member, placement, now);
+    if (outcome !== "saved") {
       clusterer.retract(member, placement);
+      // Saken finnes ikke lenger. Neste kjøring grupperer elementet på nytt.
+      if (outcome === "story-gone") clusterer.drop(placement.story);
       stats.skipped++;
       continue;
     }
@@ -234,8 +251,15 @@ async function cluster(db: Db, config: SiteConfig, now: Date, judge: JudgeSetup 
   return stats;
 }
 
-/** Lagrer plasseringen. Returnerer false hvis elementet allerede var gruppert. */
-async function persist(db: Db, row: TextRow, member: Member, placement: Placement, now: Date): Promise<boolean> {
+type PersistOutcome = "saved" | "already-clustered" | "story-gone" | "slug-taken";
+
+/**
+ * Lagrer plasseringen i én transaksjon. Hvis noe er endret av en annen prosess
+ * underveis (elementet er allerede gruppert, saken er slettet, eller slugen ble
+ * tatt samtidig), lagres ingenting, og elementet tas i neste kjøring. Andre
+ * feil stopper jobben.
+ */
+async function persist(db: Db, row: TextRow, member: Member, placement: Placement, now: Date): Promise<PersistOutcome> {
   const { story } = placement;
   const itemData = {
     clusteredAt: now,
@@ -245,41 +269,61 @@ async function persist(db: Db, row: TextRow, member: Member, placement: Placemen
     clusterNearestStoryId: placement.isNew ? (placement.nearest?.id ?? null) : null,
   };
   try {
-    await db.$transaction(async (tx) => {
-      let storyId = story.id;
-      if (storyId === null) {
-        const slug = await uniqueSlug(
-          slugify(row.title),
-          async (candidate) => (await tx.story.count({ where: { slug: candidate } })) > 0,
-        );
-        const created = await tx.story.create({
-          data: {
-            slug,
-            workingTitle: truncate(row.title, 200),
-            firstSeenAt: new Date(member.time),
-            lastSourceAt: new Date(member.time),
-          },
-          select: { id: true },
-        });
-        storyId = created.id;
-      } else {
-        await tx.story.update({
-          where: { id: storyId },
-          data: { firstSeenAt: new Date(story.firstAt), lastSourceAt: new Date(story.lastAt) },
-        });
-      }
+    const storyId = await db.$transaction(async (tx) => {
+      const id =
+        story.id === null ? await createStory(tx, row, member.time) : await extendStory(tx, story, member.time);
       const claimed = await tx.sourceItem.updateMany({
         where: { id: row.id, storyId: null },
-        data: { ...itemData, storyId },
+        data: { ...itemData, storyId: id },
       });
-      if (claimed.count === 0) throw new AlreadyClustered();
-      if (story.id === null) story.id = storyId;
+      if (claimed.count === 0) throw new PersistConflict("already-clustered");
+      return id;
     });
-    return true;
+    story.id = storyId;
+    return "saved";
   } catch (error) {
-    if (error instanceof AlreadyClustered) return false;
+    if (error instanceof PersistConflict) return error.outcome;
+    // Unik slug tatt av en annen prosess i samme øyeblikk.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return "slug-taken";
     throw error;
   }
 }
 
-class AlreadyClustered extends Error {}
+async function createStory(tx: Prisma.TransactionClient, row: TextRow, time: number): Promise<string> {
+  const slug = await uniqueSlug(
+    slugify(row.title),
+    async (candidate) => (await tx.story.count({ where: { slug: candidate } })) > 0,
+  );
+  const created = await tx.story.create({
+    data: { slug, workingTitle: truncate(row.title, 200), firstSeenAt: new Date(time), lastSourceAt: new Date(time) },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/**
+ * Utvider sakens tidsrom med det nye elementet. Tidsrommet regnes fra det som
+ * står i databasen, ikke fra minnet, så endringer en redaktør har gjort under
+ * kjøringen ikke overskrives.
+ */
+async function extendStory(tx: Prisma.TransactionClient, story: StoryState, time: number): Promise<string> {
+  const id = story.id!;
+  const current = await tx.story.findUnique({ where: { id }, select: { firstSeenAt: true, lastSourceAt: true } });
+  if (!current) throw new PersistConflict("story-gone");
+  await tx.story.update({
+    where: { id },
+    data: {
+      firstSeenAt: new Date(Math.min(current.firstSeenAt.getTime(), time)),
+      lastSourceAt: new Date(Math.max(current.lastSourceAt.getTime(), time)),
+    },
+  });
+  return id;
+}
+
+class PersistConflict extends Error {
+  constructor(readonly outcome: Exclude<PersistOutcome, "saved">) {
+    super(outcome);
+  }
+}
+
+const HOUR_MS = 60 * 60 * 1000;

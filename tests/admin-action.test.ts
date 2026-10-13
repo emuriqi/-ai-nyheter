@@ -83,28 +83,33 @@ describe("admin: flytting av elementer mellom saker", () => {
     expect(moveItem).not.toHaveBeenCalled();
   });
 
-  it("skiller ut og flytter med gyldige id-er", async () => {
+  it("skiller ut og flytter med gyldige id-er, og fjerner en gammel feilmelding fra adressen", async () => {
     requestHeaders(`Basic ${Buffer.from(`admin:${TOKEN}`).toString("base64")}`);
-    await detachStoryItem(form({ itemId: "abc123" }));
+    await expect(detachStoryItem(form({ itemId: "abc123" }))).rejects.toThrow("REDIRECT /admin/saker");
     expect(detachItem).toHaveBeenCalledWith(expect.anything(), "abc123");
-    await moveStoryItem(form({ itemId: "abc123", storyId: "def456" }));
+    await expect(moveStoryItem(form({ itemId: "abc123", storyId: "def456" }))).rejects.toThrow("REDIRECT /admin/saker");
     expect(moveItem).toHaveBeenCalledWith(expect.anything(), "abc123", "def456");
-    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(redirect).mock.calls.slice(-2)).toEqual([["/admin/saker"], ["/admin/saker"]]);
   });
 
-  it("avviser ugyldige id-er og viser forventede feil som melding", async () => {
+  it("avviser ugyldige id-er og sender forventede feil som kode, aldri som fritekst", async () => {
     requestHeaders(`Basic ${Buffer.from(`admin:${TOKEN}`).toString("base64")}`);
     await expect(moveStoryItem(form({ itemId: "abc", storyId: "../x" }))).rejects.toThrow(
-      `REDIRECT /admin/saker?feil=${encodeURIComponent("Ugyldig element eller sak.")}`,
+      "REDIRECT /admin/saker?feil=ugyldig",
     );
+    await expect(detachStoryItem(new FormData())).rejects.toThrow("REDIRECT /admin/saker?feil=ugyldig");
     expect(moveItem).not.toHaveBeenCalled();
+    expect(detachItem).not.toHaveBeenCalled();
 
-    vi.mocked(detachItem).mockRejectedValueOnce(new ManualClusterError("Saken har en artikkel."));
-    await expect(detachStoryItem(form({ itemId: "abc" }))).rejects.toThrow(
-      `REDIRECT /admin/saker?feil=${encodeURIComponent("Saken har en artikkel.")}`,
+    vi.mocked(detachItem).mockRejectedValueOnce(new ManualClusterError("har-artikkel"));
+    await expect(detachStoryItem(form({ itemId: "abc" }))).rejects.toThrow("REDIRECT /admin/saker?feil=har-artikkel");
+
+    vi.mocked(moveItem).mockRejectedValueOnce(new ManualClusterError("gruppering-kjorer"));
+    await expect(moveStoryItem(form({ itemId: "abc", storyId: "def" }))).rejects.toThrow(
+      "REDIRECT /admin/saker?feil=gruppering-kjorer",
     );
-    expect(redirect).toHaveBeenCalled();
 
+    // Uventede feil vises som vanlig feilside.
     vi.mocked(detachItem).mockRejectedValueOnce(new Error("databasefeil"));
     await expect(detachStoryItem(form({ itemId: "abc" }))).rejects.toThrow("databasefeil");
   });

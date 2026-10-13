@@ -4,6 +4,7 @@ import { getStoriesForAdmin } from "@/lib/admin";
 import { hasClaudeKey } from "@/lib/ai/claude";
 import { siteConfig } from "@/lib/config";
 import { formatDateTime } from "@/lib/format";
+import { manualErrorMessage } from "@/lib/cluster/manual";
 import { ARTICLE_STATUS_LABEL, CLUSTER_METHOD_LABEL, label } from "@/lib/labels";
 import { detachStoryItem, moveStoryItem } from "../actions";
 
@@ -27,7 +28,8 @@ export default function AdminStoriesPage({ searchParams }: PageProps<"/admin/sak
 async function StoryList({ searchParams }: { searchParams: PageProps<"/admin/saker">["searchParams"] }) {
   const { stories, unclustered } = await getStoriesForAdmin();
   const { feil } = await searchParams;
-  const error = typeof feil === "string" ? feil.slice(0, 200) : null;
+  // Bare kjente koder vises. Fritekst fra adressen vises aldri.
+  const error = manualErrorMessage(feil);
   const { sameStoryThreshold, borderlineThreshold, storyWindowHours, useClaudeForBorderline } = siteConfig.clustering;
   const claudeOn = useClaudeForBorderline && hasClaudeKey();
 
@@ -87,7 +89,10 @@ async function StoryList({ searchParams }: { searchParams: PageProps<"/admin/sak
                           {item.clusterMethod ? label(CLUSTER_METHOD_LABEL, item.clusterMethod) : "Ikke gruppert"}
                           {item.clusterScore !== null && ` (likhet ${formatScore(item.clusterScore)})`}
                           {item.clusterNote && ` – «${item.clusterNote}»`}
-                          {item.nearest && ` Lignet mest på «${item.nearest.workingTitle}».`}
+                          {item.nearest &&
+                            (item.clusterMethod === "MANUAL"
+                              ? ` Kom fra «${item.nearest.workingTitle}».`
+                              : ` Lignet mest på «${item.nearest.workingTitle}».`)}
                         </p>
                         {!locked && (
                           <div className="mt-2 flex flex-wrap gap-2">
@@ -110,7 +115,8 @@ async function StoryList({ searchParams }: { searchParams: PageProps<"/admin/sak
                                   type="submit"
                                   className="rounded border border-border px-2 py-1 text-xs hover:border-foreground"
                                 >
-                                  Flytt til «{item.nearest.workingTitle}»
+                                  {item.clusterMethod === "MANUAL" ? "Flytt tilbake til" : "Flytt til"} «
+                                  {item.nearest.workingTitle}»
                                 </button>
                               </form>
                             )}

@@ -61,7 +61,8 @@ export default defineSiteConfig({
     dataProcessors: [
       {
         name: "Anthropic PBC",
-        purpose: "Skriving og kontroll av artikler og svar i chatten via Claude API",
+        purpose:
+          "Gruppering av kildeelementer i saker (bare tittel og kort utdrag, i tvilstilfeller), skriving og kontroll av artikler, og svar i chatten via Claude API",
         location: "USA",
       },
     ],
@@ -85,6 +86,7 @@ export default defineSiteConfig({
    */
   clustering: {
     storyWindowHours: 72,
+    maxStoryHours: 168,
     sameStoryThreshold: 0.4,
     borderlineThreshold: 0.15,
     // Krever ANTHROPIC_API_KEY. Uten nøkkel blir gråsoneelementer egne saker.

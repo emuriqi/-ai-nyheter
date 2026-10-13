@@ -10,21 +10,40 @@ export function proxy(request: NextRequest) {
   const result = checkBasicAuth(request.headers.get("authorization"), process.env.ADMIN_TOKEN);
 
   if (result === "ok") {
-    return NextResponse.next();
+    return withFrameProtection(NextResponse.next());
   }
   if (result === "disabled") {
-    return new NextResponse("Admin er avslått. Sett ADMIN_TOKEN til en tilfeldig verdi på minst 24 tegn i .env.", {
-      status: 503,
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
+    return withFrameProtection(
+      new NextResponse("Admin er avslått. Sett ADMIN_TOKEN til en tilfeldig verdi på minst 24 tegn i .env.", {
+        status: 503,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      }),
+    );
   }
-  return new NextResponse("Krever innlogging.", {
-    status: 401,
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "WWW-Authenticate": 'Basic realm="AI-nyheter admin", charset="UTF-8"',
-    },
-  });
+  return withFrameProtection(
+    new NextResponse("Krever innlogging.", {
+      status: 401,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "WWW-Authenticate": 'Basic realm="AI-nyheter admin", charset="UTF-8"',
+      },
+    }),
+  );
+}
+
+/**
+ * Admin kan ikke vises i en ramme på et annet nettsted. Det hindrer at en
+ * innlogget redaktør lures til å klikke på knapper i en skjult admin-side
+ * (clickjacking). Basic Auth er ingen informasjonskapsel, så SameSite hjelper ikke.
+ */
+const FRAME_PROTECTION_HEADERS = {
+  "X-Frame-Options": "DENY",
+  "Content-Security-Policy": "frame-ancestors 'none'",
+} as const;
+
+function withFrameProtection(response: NextResponse): NextResponse {
+  for (const [name, value] of Object.entries(FRAME_PROTECTION_HEADERS)) response.headers.set(name, value);
+  return response;
 }
 
 export const config = {

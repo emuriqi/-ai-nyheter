@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div>
-      <nav aria-label="Admin" className="mb-8 flex gap-6 border-b border-border pb-3 text-sm">
+      <nav aria-label="Admin" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 border-b border-border pb-3 text-sm">
         <span className="font-semibold">Admin</span>
         <Link href="/admin" className="hover:underline">
           Oversikt

@@ -1,0 +1,178 @@
+{
+  "_info": "SYNTETISK tillegg til cluster-corpus.json med vanskelige tilfeller: ulike hendelser på samme sted eller fra samme kilde med lik form, og oppfølginger fra samme kilde. Brukes sammen med hovedkorpuset. Alt er oppdiktet, også firmanavnene. Skal aldri publiseres.",
+  "events": {
+    "regn-more": "Mye regn i Møre og Romsdal fredag 9. oktober 2026: 50–80 mm på et døgn i Romsdal og på Sunnmøre. Meteorologisk institutt sendte ut GULT farevarsel for kraftig regn torsdag 8. oktober ca. kl. 14 norsk tid. Fare for overvann i tettsteder og mindre jordskred. Dette er et nytt værsystem, ikke vindvarselet fra 7. oktober.",
+    "sno-more": "Snø i fjellet i Møre og Romsdal søndag 11. oktober 2026: 20–30 cm nysnø over 600 meter. Meteorologisk institutt sendte ut GULT farevarsel for snø lørdag 10. oktober ca. kl. 10. Vanskelige kjøreforhold over fjelloverganger, Trollstigen kan bli stengt. Statens vegvesen stengte Trollstigen for vinteren søndag 11. oktober på grunn av snøen.",
+    "vind-more-2": "Et nytt, separat lavtrykk gir kraftig vind på kysten av Møre og Romsdal tirsdag 13. oktober 2026, med vindkast opp mot 28 m/s. Meteorologisk institutt sendte ut GULT farevarsel for kraftige vindkast mandag 12. oktober ca. kl. 08. Dette er en ny hendelse, ikke vindvarselet fra 6.–7. oktober.",
+    "skred-troms": "NVE varslet tirsdag 6. oktober 2026 FAREGRAD 3 (betydelig) snøskredfare i Lyngen og Tromsø-området i Troms etter mye nysnø i fjellet. Gjelder fjellet, ikke bebyggelse. Folk på tur bes unngå bratte heng.",
+    "flom-troms": "NVE sendte fredag 9. oktober 2026 ut GULT farevarsel for flom i Indre Troms (Målselva og Barduelva) etter mye regn og snøsmelting i lavlandet. Lørdag 10. oktober ble varselet oppgradert til ORANSJE. Lokale oversvømmelser av veier ventes.",
+    "tilbake-palegg": "Mattilsynet meldte mandag 5. oktober 2026 at produsenten «Fjordgården» (oppdiktet) tilbakekaller kyllingpålegg (150 g) på grunn av funn av listeria. Varen er solgt i dagligvarebutikker over hele landet. Tirsdag 6. oktober utvidet produsenten tilbakekallingen til også å gjelde kalkunpålegg fra samme produksjonslinje.",
+    "tilbake-notter": "Mattilsynet meldte onsdag 7. oktober 2026 at importøren «Nordsnacks» (oppdiktet) tilbakekaller en studentblanding (300 g) fordi den kan inneholde peanøtter som ikke er oppgitt på etiketten. Fare for personer med peanøttallergi. Ingen kjente tilfeller av sykdom.",
+    "ssb-utenrikshandel": "SSB publiserte fredag 9. oktober 2026 kl. 08 norsk tid tall for utenrikshandelen med varer i september: handelsoverskuddet var 52,3 milliarder kroner, ned 14 prosent fra september i fjor, hovedsakelig på grunn av lavere gasspriser. Fastlandseksporten økte 3,2 prosent.",
+    "fastlege": "Regjeringen (Helse- og omsorgsdepartementet) la torsdag 8. oktober 2026 fram en plan for flere fastleger: 400 nye utdanningsstillinger for allmennleger (ALIS) fra 2027 og en økt basistilskuddssats for fastleger i distriktene. Ingen lovendring, men en satsing i statsbudsjettet."
+  },
+  "items": [
+    {
+      "id": "hard-varsel-01",
+      "source": "varsel",
+      "event": "regn-more",
+      "title": "Gult farevarsel – kraftig regn, Møre og Romsdal",
+      "excerpt": "Fredag 9. oktober ventes det 50–80 mm nedbør i løpet av 24 timer på Sunnmøre og i Romsdal. Overvann kan forekomme i tettbygde strøk, og det er fare for mindre jordskred.",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T12:07:00Z"
+    },
+    {
+      "id": "hard-varsel-02",
+      "source": "varsel",
+      "event": "sno-more",
+      "title": "Gult farevarsel – snø, Møre og Romsdal",
+      "excerpt": "Søndag 11. oktober ventes det 20–30 cm nysnø i høyder over 600 moh. Krevende kjøreforhold på fjellovergangene, og vegstrekninger som Trollstigen kan bli stengt.",
+      "bodyText": null,
+      "publishedAt": "2026-10-10T08:04:00Z"
+    },
+    {
+      "id": "hard-varsel-03",
+      "source": "varsel",
+      "event": "vind-more-2",
+      "title": "Gult farevarsel – kraftige vindkast, Møre og Romsdal",
+      "excerpt": "Tirsdag 13. oktober ventes det vindkast opp mot 28 m/s langs kysten av Møre og Romsdal. Løse gjenstander kan blåse bort, og det kan bli forsinkelser i transport.",
+      "bodyText": null,
+      "publishedAt": "2026-10-12T06:11:00Z"
+    },
+    {
+      "id": "hard-etat-01",
+      "source": "etat",
+      "event": "sno-more",
+      "title": "Trollstigen er stengt for vinteren",
+      "excerpt": "Snøfallet i fjellet i Møre og Romsdal gjør at Statens vegvesen stenger Trollstigen for sesongen fra i dag, søndag. Veien blir ikke åpnet igjen i vinter.",
+      "bodyText": "Det har kommet mye nysnø i høyden det siste døgnet, og forholdene på fjellovergangene i fylket er krevende. Vi har derfor valgt å avslutte sesongen for Trollstigen nå. Veien holdes stengt gjennom vinteren.\n\nTrafikanter som skal over andre fjelloverganger i Møre og Romsdal, må regne med vanskelige kjøreforhold. Sørg for at bilen er klar for vinterføre, beregn god tid og følg med på trafikkmeldingene før du kjører.",
+      "publishedAt": "2026-10-11T09:47:00Z"
+    },
+    {
+      "id": "hard-etat-02",
+      "source": "etat",
+      "event": "skred-troms",
+      "title": "Betydelig snøskredfare i Lyngen og Tromsø",
+      "excerpt": "Varsom har satt faregrad 3 (betydelig) for varslingsregionene Lyngen og Tromsø. Store mengder nysnø i fjellet gjør at vi fraråder ferdsel i og under bratte heng. Varselet gjelder fjellterreng, ikke bebygde områder.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T14:22:00Z"
+    },
+    {
+      "id": "hard-etat-03",
+      "source": "etat",
+      "event": "flom-troms",
+      "title": "Gult farevarsel for flom i Indre Troms",
+      "excerpt": "NVE har sendt ut gult farevarsel for flom i Indre Troms. Kraftig nedbør kombinert med snøsmelting i lavlandet gir økende vannføring i Målselva og Barduelva.",
+      "bodyText": "Det har kommet mye regn i Indre Troms, samtidig som snøen smelter i lavereliggende områder. Dette gir stigende vannstand i elvene, særlig i Målselva og Barduelva.\n\nDet må påregnes lokale oversvømmelser, også av veier. Vi anbefaler å holde god avstand til elver og bekker med stor vannføring, og å følge med på oppdaterte varsler på varsom.no.",
+      "publishedAt": "2026-10-09T10:36:00Z"
+    },
+    {
+      "id": "hard-etat-04",
+      "source": "etat",
+      "event": "flom-troms",
+      "title": "Flomvarselet for Indre Troms oppgradert til oransje",
+      "excerpt": "NVE har oppjustert farevarselet for flom i Indre Troms fra gult til oransje nivå. Det ventes høy vannføring i Målselva og Barduelva, og veier kan lokalt bli satt under vann.",
+      "bodyText": null,
+      "publishedAt": "2026-10-10T08:14:00Z"
+    },
+    {
+      "id": "hard-etat-05",
+      "source": "etat",
+      "event": "tilbake-palegg",
+      "title": "Fjordgården tilbakekaller kyllingpålegg",
+      "excerpt": "Fjordgården trekker tilbake kyllingpålegg i 150 grams pakning etter at det er påvist listeria i produktet. Varen har vært solgt i dagligvarebutikker i hele landet.",
+      "bodyText": "Produkt: Kyllingpålegg, 150 g\nProdusent: Fjordgården\nÅrsak: Påvist listeria\nOmfang: Solgt i dagligvarehandelen over hele landet\n\nForbrukere som har kjøpt produktet, oppfordres til ikke å spise det. Varen kan leveres tilbake til butikken der den ble kjøpt. Listeria kan gi alvorlig sykdom, særlig hos gravide, eldre og personer med nedsatt immunforsvar.",
+      "publishedAt": "2026-10-05T11:23:00Z"
+    },
+    {
+      "id": "hard-etat-06",
+      "source": "etat",
+      "event": "tilbake-palegg",
+      "title": "Fjordgården utvider tilbakekallingen – gjelder nå også kalkunpålegg",
+      "excerpt": "Tilbakekallingen fra Fjordgården omfatter nå også kalkunpålegg fra den samme produksjonslinjen som kyllingpålegget. Bakgrunnen er funn av listeria.",
+      "bodyText": null,
+      "publishedAt": "2026-10-06T12:51:00Z"
+    },
+    {
+      "id": "hard-etat-07",
+      "source": "etat",
+      "event": "tilbake-notter",
+      "title": "Nordsnacks tilbakekaller studentblanding",
+      "excerpt": "Nordsnacks trekker tilbake studentblanding i 300 grams pakning fordi produktet kan inneholde peanøtter som ikke er oppgitt på etiketten.",
+      "bodyText": "Produkt: Studentblanding, 300 g\nImportør: Nordsnacks\nÅrsak: Kan inneholde peanøtter som ikke er merket\n\nProduktet kan være helsefarlig for personer med allergi mot peanøtter. Det er ikke kjent at noen har blitt syke. Personer med peanøttallergi bør ikke spise produktet, og varen kan leveres tilbake til butikken der den ble kjøpt.",
+      "publishedAt": "2026-10-07T11:18:00Z"
+    },
+    {
+      "id": "hard-statistikk-01",
+      "source": "statistikk",
+      "event": "ssb-utenrikshandel",
+      "title": "Handelsoverskuddet ble 52,3 milliarder kroner i september",
+      "excerpt": "Overskuddet på vareutvekslingen med utlandet var 14 prosent lavere i september enn i samme måned året før. Nedgangen skyldes i hovedsak lavere priser på gass. Eksporten av fastlandsvarer gikk opp 3,2 prosent.",
+      "bodyText": null,
+      "publishedAt": "2026-10-09T06:00:00Z"
+    },
+    {
+      "id": "hard-departement-01",
+      "source": "departement",
+      "event": "fastlege",
+      "title": "Regjeringen legger fram plan for å styrke fastlegeordningen",
+      "excerpt": "Helse- og omsorgsdepartementet presenterer i dag en plan for å få flere fastleger. Fra 2027 kommer 400 nye ALIS-stillinger, og fastleger i distriktene får et høyere basistilskudd.",
+      "bodyText": "Formålet med planen er at flere innbyggere skal ha en fast lege, og at det skal bli lettere for kommunene å rekruttere og beholde allmennleger.\n\nFra og med 2027 finansierer regjeringen 400 nye utdanningsstillinger for allmennleger (ALIS). Stillingene gir leger en strukturert vei gjennom spesialiseringen i allmennmedisin, med veiledning og trygge rammer.\n\nI tillegg økes satsen for basistilskudd til fastleger i distriktene. Endringen skal gjøre det mer attraktivt å etablere seg og bli værende som fastlege utenfor de store byene.\n\nPlanen krever ingen lovendringer. Tiltakene gjennomføres som en satsing over statsbudsjettet.",
+      "publishedAt": "2026-10-08T08:37:00Z"
+    },
+    {
+      "id": "hard-byraa-01",
+      "source": "byraa",
+      "event": "regn-more",
+      "title": "Gult farevarsel for kraftig regn i Møre og Romsdal",
+      "excerpt": "Meteorologisk institutt venter 50 til 80 millimeter nedbør på ett døgn i Romsdal og på Sunnmøre fredag. Det er fare for overvann i tettbebygde strøk og for mindre jordskred.",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T13:14:00Z"
+    },
+    {
+      "id": "hard-byraa-02",
+      "source": "byraa",
+      "event": "vind-more-2",
+      "title": "Farevarsel for kraftige vindkast på Møre-kysten tirsdag",
+      "excerpt": "Et lavtrykk ventes å gi vindkast på opptil 28 meter i sekundet langs kysten av Møre og Romsdal tirsdag. Meteorologisk institutt har sendt ut gult farevarsel.",
+      "bodyText": null,
+      "publishedAt": "2026-10-12T07:12:00Z"
+    },
+    {
+      "id": "hard-byraa-03",
+      "source": "byraa",
+      "event": "flom-troms",
+      "title": "Flomvarselet i Indre Troms oppjustert til oransje",
+      "excerpt": "NVE har skjerpet farevarselet for flom i Målselva og Barduelva fra gult til oransje. Mye regn og snøsmelting i lavlandet kan gi lokale oversvømmelser av veier.",
+      "bodyText": null,
+      "publishedAt": "2026-10-10T09:47:00Z"
+    },
+    {
+      "id": "hard-byraa-04",
+      "source": "byraa",
+      "event": "tilbake-palegg",
+      "title": "Kyllingpålegg trekkes tilbake etter listeriafunn",
+      "excerpt": "Produsenten Fjordgården kaller tilbake 150-grams kyllingpålegg etter at det er påvist listeria, opplyser Mattilsynet. Produktet er solgt i dagligvarebutikker i hele landet.",
+      "bodyText": null,
+      "publishedAt": "2026-10-05T13:21:00Z"
+    },
+    {
+      "id": "hard-byraa-05",
+      "source": "byraa",
+      "event": "tilbake-notter",
+      "title": "Studentblanding kalles tilbake – kan inneholde peanøtter",
+      "excerpt": "Importøren Nordsnacks trekker tilbake en 300-grams studentblanding som kan inneholde peanøtter uten at det står på etiketten, melder Mattilsynet. Varen kan være farlig for peanøttallergikere. Ingen er kjent syke.",
+      "bodyText": null,
+      "publishedAt": "2026-10-07T13:06:00Z"
+    },
+    {
+      "id": "hard-byraa-06",
+      "source": "byraa",
+      "event": "fastlege",
+      "title": "Regjeringen vil ha flere fastleger",
+      "excerpt": "Helse- og omsorgsdepartementet legger opp til 400 nye utdanningsstillinger for allmennleger fra 2027 og høyere basistilskudd for fastleger i distriktene. Satsingen tas over statsbudsjettet og krever ingen lovendring.",
+      "bodyText": null,
+      "publishedAt": "2026-10-08T10:52:00Z"
+    }
+  ]
+}

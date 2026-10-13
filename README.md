@@ -112,54 +112,74 @@ kilde ikke hentes to ganger innenfor minste intervall.
 ### Gruppering (fase 3)
 
 Hvert nytt element legges i den åpne saken det ligner mest på, eller starter en ny sak
-(`src/lib/cluster/`). Elementene behandles i tidsrekkefølge, som i klassisk «single-pass»-gruppering fra forskningen
-på Topic Detection and Tracking.
+(`src/lib/cluster/`). Elementene behandles i publiseringsrekkefølge, som i klassisk «single-pass»-gruppering fra
+forskningen på Topic Detection and Tracking.
 
-1. **Teksten gjøres om til ord.** Tittel (dobbel vekt), utdrag og starten av brødteksten deles i ord, norske stoppord
-   fjernes, og ordene stammes med Snowball-stemmeren for norsk («regjeringen» og «regjeringa» blir «regjering»).
-   Egennavn som Klepp, Agder og NVE teller dobbelt, fordi de skiller best mellom to saker om samme tema.
-   Ledetekster i faktalister (som «Status:» og «Komité:» fra Stortinget) fjernes.
+1. **Teksten gjøres om til ord.** Tittel (dobbel vekt), utdrag og starten av brødteksten (halv vekt) deles i ord,
+   norske stoppord fjernes, og ordene stammes med Snowball-stemmeren for norsk («regjeringen» og «regjeringa» blir
+   «regjering»). Ledetekster i faktalister (som «Status:» og «Komité:» fra Stortinget) fjernes.
 2. **Ordene vektes med TF-IDF** over elementene fra de siste `idfWindowDays` dagene, så ord som står overalt
-   («regjeringen», «prosent») teller lite.
+   («regjeringen», «prosent») teller lite og sjeldne ord som stedsnavn teller mye.
 3. **Likheten måles med cosinus** mot hvert element i de åpne sakene. En sak er åpen så lenge det nye elementet er
-   publisert innenfor `storyWindowHours` fra sakens første eller siste kilde.
+   publisert innenfor `storyWindowHours` (72) fra sakens første eller siste kilde, og saken ikke ville dekket mer enn
+   `maxStoryHours` (7 døgn). Grensen hindrer at ulike hendelser på samme sted lenkes sammen til én sak som aldri
+   lukkes.
 4. **Avgjørelsen** følger to grenser i `config/site.config.ts`:
-   - likhet fra `sameStoryThreshold` (0,40): samme sak
+   - likhet fra `sameStoryThreshold` (0,40) med et element fra **en annen kilde**: samme sak
    - under `borderlineThreshold` (0,15): ny sak
-   - imellom er en gråsone. Der avgjør Claude (`prompts/cluster-same-story.md`) hvis `ANTHROPIC_API_KEY` er satt.
-     Claude får bare tittel og et kort utdrag (maks 600 tegn) fra det nye elementet og fra opptil tre kandidatsaker,
-     og svarer med et strukturert svar (A, B, C eller «ingen») og en kort begrunnelse. Uten nøkkel, ved feil eller
-     når grensen `maxClaudeChecksPerRun` er nådd, blir elementet en egen sak og merkes som usikkert.
+   - alt imellom, og høy likhet som bare er med elementer fra samme kilde, er en gråsone. En kilde bruker ofte
+     faste maler, så to ulike farevarsler for samme fylke kan ligne mer enn to omtaler av samme hendelse. I gråsonen
+     avgjør Claude (`prompts/cluster-same-story.md`) hvis `ANTHROPIC_API_KEY` er satt. Claude får bare tittel og et
+     kort utdrag (maks 600 tegn) fra det nye elementet og fra opptil tre kandidatsaker (de fire nyeste elementene i
+     hver), og svarer med strukturert output der API-et bare tillater A, B, C eller «ingen», pluss en kort
+     begrunnelse. Uten nøkkel, ved feil, avslag eller ugyldig svar, eller når grensen `maxClaudeChecksPerRun` er
+     nådd, blir elementet en egen sak og merkes som usikkert.
 
-Grensene er valgt mot et syntetisk testkorpus (`tests/fixtures/cluster-corpus.json`): 48 oppdiktede elementer om
-19 hendelser, skrevet av flere uavhengige KI-agenter i sju kildestiler (farevarsel, etat, departement, Stortinget,
-SSB, kommune, nyhetsbyrå). Korpuset har bevisst vanskelige par: to farevarsler samme dag, fugleinfluensa i to
-fylker, to lovforslag fra samme departement som Stortinget mottok samme dag, og KPI for to måneder. Målt med
-`npm run eval:cluster`:
+Grensene er valgt mot et syntetisk testkorpus i to deler, skrevet av flere uavhengige KI-agenter i sju kildestiler
+(farevarsel, etat, departement, Stortinget, SSB, kommune, nyhetsbyrå):
 
-| Oppsett                         | Presisjon | Dekning | Saker (fasit 19) |
-| ------------------------------- | --------- | ------- | ---------------- |
-| Uten Claude                     | 100 %     | 59 %    | 27               |
-| Med en perfekt dommer i gråsonen | 100 %     | 100 %   | 19 (15 vurderinger) |
+- `tests/fixtures/cluster-corpus.json`: 48 elementer om 19 hendelser, med bevisst vanskelige par: to farevarsler
+  samme dag, fugleinfluensa i to fylker, to lovforslag fra samme departement som Stortinget mottok samme dag, og KPI
+  for to måneder.
+- `tests/fixtures/cluster-corpus-hard.json`: 18 elementer om 9 hendelser til, laget etter en kritisk gjennomgang:
+  vind, regn og snø i Møre og Romsdal i samme uke, et nytt vindvarsel uken etter, to ulike tilbakekallinger fra
+  Mattilsynet, utenrikshandel og KPI fra SSB samme morgen, og oppfølginger fra samme kilde (oppgradert flomvarsel,
+  utvidet tilbakekalling).
+
+Målt med `npm run eval:cluster`:
+
+| Korpus                          | Oppsett                          | Presisjon | Dekning | Saker (fasit)           |
+| ------------------------------- | -------------------------------- | --------- | ------- | ----------------------- |
+| Hovedkorpuset (48)              | Uten Claude                      | 100 %     | 50 %    | 29 (19)                 |
+| Hovedkorpuset (48)              | Med en perfekt dommer i gråsonen | 100 %     | 100 %   | 19 (19), 17 vurderinger |
+| Med vanskelige tilfeller (66)   | Uten Claude                      | 100 %     | 51 %    | 41 (28)                 |
+| Med vanskelige tilfeller (66)   | Med en perfekt dommer i gråsonen | 100 %     | 100 %   | 28 (28), 26 vurderinger |
 
 Presisjon er andelen par i samme sak som virkelig hører sammen, og dekning er andelen par som hører sammen og ble
 lagt sammen. Grensene prioriterer presisjon: å blande to saker gir feil fakta i artikkelen, mens en sak som er
-delt i to bare gir et ekstra utkast som redaktøren ser før publisering. Raden med perfekt dommer viser hva
-gråsonen kan gi; hvor nær Claude kommer, måles med `npm run eval:cluster -- --claude` (krever nøkkel, om lag 15
-korte kall). Korpuset er lite og skrevet for testen, så tallene sier mer om de vanskelige tilfellene enn om ekte
-trafikk.
+delt i to bare gir et ekstra utkast som redaktøren ser før publisering. Den perfekte dommeren kjenner fasiten og
+viser hva gråsonen kan gi. Hvor nær Claude kommer, måles med `npm run eval:cluster -- --claude` (krever nøkkel, om
+lag 45 korte kall). Korpuset er lite og skrevet for testen, så tallene sier mer om de vanskelige tilfellene enn om
+ekte trafikk. Høyeste likhet mellom to ulike saker fra ulike kilder i korpuset er 0,32, mot grensen 0,40.
 
-Elementer som kilden har reservert mot tekst- og datautvinning, analyseres ikke og grupperes derfor ikke. Det
-samme gjelder elementer fra kilder som ikke er aktive og elementer der teksten er slettet.
+Bare tekst som kan analyseres, brukes noe sted i grupperingen: elementet og kilden er ikke reservert mot tekst- og
+datautvinning, kilden er aktiv, og teksten er ikke slettet. Det gjelder nye elementer, elementene i åpne saker som
+kan sendes til Claude, og ordvektene (`src/lib/cluster/eligibility.ts`).
+
+Jobben tåler at andre endrer data underveis. Er et element allerede gruppert av en annen prosess, eller er saken
+det skulle til slettet eller tatt av en samtidig slug, lagres ingenting for det elementet, og det tas i neste
+kjøring. En feil i grupperingen stopper ikke slettingen av kildetekst, som alltid kjører.
 
 Admin-siden **Saker** viser hver sak med kildene, hvordan hvert element ble gruppert, likheten og Claudes
 begrunnelse. Usikre elementer er merket og viser saken de lignet mest på, med en knapp for å flytte dem dit. Et
-element kan også skilles ut til en egen sak. Saker som har fått en artikkel, kan ikke endres her; det skal gå
-gjennom oppdateringsflyten med endringslogg (fase 5).
+element kan også skilles ut til en egen sak, og en flytting kan angres med «Flytt tilbake». Saken som blir igjen,
+får ny arbeidstittel hvis elementet den kom fra, ble flyttet ut. Det går ikke an å flytte mens grupperingen kjører,
+og saker som har fått en artikkel, kan ikke endres her; det skal gå gjennom oppdateringsflyten med endringslogg
+(fase 5).
 
 Kall til Claude bruker `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`): hvis modellen avviser en
 forespørsel, kjører API-et den på nytt med reservemodellen Anthropic anbefaler for den typen avslag, i samme kall.
-Hver kjøring lagrer antall kall og tokens i jobbloggen.
+Hver kjøring lagrer antall kall og tokens i jobbloggen, også for svar som ikke kunne brukes.
 
 ### Mappestruktur
 
@@ -243,17 +263,23 @@ aldri mot nettet: innhentingen testes med en falsk `fetch` og syntetiske eksempe
   KI-crawlere, også for enkeltartikler og ved omdirigeringer), at ingenting hentes når reglene ikke kan leses,
   størrelsesgrense, tegnsett, tidsavbrudd, betingede forespørsler, minste intervall, duplikater og endringer,
   fulltekst bare fra kildens egne verter, feil i én kilde som ikke stopper de andre, og samtidige kjøringer
-- gruppering: ordstammer, stoppord, egennavn, ledetekster, TF-IDF og cosinus, grensene og gråsonen, tidsvinduet,
-  hva Claude får se (bare tittel og kort utdrag, uten mulighet til å lage egne tagger), avslag og feil, og kvaliteten
-  på testkorpuset (ingen feil sammenslåinger, de vanskelige parene holdes adskilt)
-- grupperingsjobben mot en ekte database: nye saker og saker fra tidligere kjøringer, at reserverte, slettede og
-  pausede elementer ikke grupperes, lagring av metode, likhet og begrunnelse, og manuell flytting i admin (ikke for
-  saker med artikkel)
+- gruppering: ordstammer, stoppord, ledetekster, TF-IDF og cosinus, grensene, gråsonen og regelen for samme kilde,
+  tidsvinduet og maks varighet, elementer i feil rekkefølge, hva Claude får se (bare tittel og kort utdrag, de fire
+  nyeste elementene, uten mulighet til å lage egne tagger), og kvaliteten på begge korpusene (ingen feil
+  sammenslåinger, de vanskelige parene holdes adskilt)
+- Claude-kallet med en ekte SDK-klient og falskt nettverkslag: modell, beta-header, reservemodell, JSON-skjema med
+  enum, avslag, avkortede og ugyldige svar (tokenene telles likevel), og at feil nøkkel stopper videre kall
+- grupperingsjobben mot en ekte database: nye saker og saker fra tidligere kjøringer, at tekst som ikke kan
+  analyseres (reservert, slettet, pauset kilde, kilde med TDM-reservasjon) verken grupperes, sendes til Claude eller
+  påvirker ordvektene, lagring av metode, likhet og begrunnelse, endringer fra andre prosesser underveis, slugs som
+  er brukt opp, og at feil i oppsettet av Claude ikke stopper jobben
+- manuell flytting i admin: skill ut, flytt, angre, ny arbeidstittel, ikke for saker med artikkel og ikke mens
+  grupperingen kjører, og at feilmeldinger bare vises fra en fast liste med koder
 - hele pipelinen mot en ekte database: synkronisering, innhenting, gruppering, sletting av utløpt tekst og
-  oppsummeringen
+  oppsummeringen, og at slettingen kjører selv om innhentingen eller grupperingen feiler
 - knappene «Kjør innhenting nå», «Skill ut» og «Flytt» (tilgangssjekk i server actions, validering og feilmeldinger)
 - cron-ruten og Bearer-tokenet
-- tilgangskontroll for admin: hvilke ruter proxyen dekker, svarene den gir, krav til passord og at datalaget
-  avviser forespørsler uten gyldig innlogging før databasen leses
+- tilgangskontroll for admin: hvilke ruter proxyen dekker, svarene den gir, at admin ikke kan rammes inn av andre
+  nettsteder, krav til passord og at datalaget avviser forespørsler uten gyldig innlogging før databasen leses
 - datamodellen fra kilde til endringslogg, med fremmednøkler og unike nøkler, og at en sak med artikkel ikke kan
   slettes

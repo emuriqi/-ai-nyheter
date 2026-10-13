@@ -1,5 +1,4 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import {
   type ClaudeUsage,
@@ -17,10 +16,23 @@ import type { ItemText } from "./features";
 const MAX_TEXT_CHARS = 600;
 const MAX_TOKENS = 4096;
 
-const verdictSchema = z.object({
-  sak: z.enum(["A", "B", "C", "ingen"]),
-  begrunnelse: z.string(),
-});
+const VERDICT_KEYS = ["A", "B", "C", "ingen"] as const;
+
+/**
+ * JSON-skjemaet for svaret, sendt uendret til API-et så strukturert output
+ * håndhever de fire lovlige verdiene. (SDK-ens zod-hjelper fjerner enum.)
+ */
+export const VERDICT_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    sak: { type: "string", enum: [...VERDICT_KEYS] },
+    begrunnelse: { type: "string" },
+  },
+  required: ["sak", "begrunnelse"],
+  additionalProperties: false,
+} as const;
+
+const verdictSchema = z.object({ sak: z.enum(VERDICT_KEYS), begrunnelse: z.string() });
 
 /** Teksten fra kildene kan ikke lage egne tagger i meldingen til Claude. */
 function escapeTags(text: string): string {
@@ -57,40 +69,56 @@ export function createClaudeJudge(client: Anthropic, model: string): ClaudeJudge
   const judge: StoryJudge = async (item, candidates) => {
     if (disabled || candidates.length === 0) return undefined;
     usage.calls++;
+    let response: Anthropic.Beta.BetaMessage;
     try {
-      const response = await client.beta.messages.parse({
+      response = await client.beta.messages.create({
         model,
         max_tokens: MAX_TOKENS,
         betas: [SERVER_SIDE_FALLBACK_BETA],
         fallbacks: "default",
         // Klassifisering trenger lite resonnering.
-        output_config: { effort: "low", format: betaZodOutputFormat(verdictSchema) },
+        output_config: { effort: "low", format: { type: "json_schema", schema: VERDICT_JSON_SCHEMA } },
         system: prompt.text,
         messages: [{ role: "user", content: buildJudgeMessage(item, candidates) }],
       });
-      usage.inputTokens += response.usage.input_tokens;
-      usage.outputTokens += response.usage.output_tokens;
-      const verdict = response.stop_reason === "refusal" ? null : response.parsed_output;
-      if (!verdict) {
-        usage.failures++;
-        return undefined;
-      }
-      const keys = new Set(candidates.map((c) => c.key));
-      if (verdict.sak !== "ingen" && !keys.has(verdict.sak)) {
-        usage.failures++;
-        return undefined;
-      }
-      return {
-        match: verdict.sak === "ingen" ? null : verdict.sak,
-        reason: truncate(verdict.begrunnelse.trim(), 300),
-      };
     } catch (error) {
       usage.failures++;
       if (isFatalClaudeError(error)) disabled = true;
       console.warn(`Claude-vurdering feilet: ${describeClaudeError(error)}`);
       return undefined;
     }
+
+    // Tokenene telles også når svaret ikke kan brukes; de er betalt.
+    usage.inputTokens += response.usage.input_tokens;
+    usage.outputTokens += response.usage.output_tokens;
+    if (response.stop_reason !== "end_turn") {
+      usage.failures++;
+      console.warn(`Claude-vurdering uten svar: stop_reason ${response.stop_reason ?? "mangler"}`);
+      return undefined;
+    }
+    const verdict = parseVerdict(response);
+    if (!verdict || (verdict.sak !== "ingen" && !candidates.some((c) => c.key === verdict.sak))) {
+      usage.failures++;
+      console.warn("Claude-vurdering uten svar: svaret kunne ikke tolkes");
+      return undefined;
+    }
+    return {
+      match: verdict.sak === "ingen" ? null : verdict.sak,
+      reason: truncate(verdict.begrunnelse.trim(), 300),
+    };
   };
 
   return { judge, usage, promptVersion: prompt.version };
+}
+
+/** Leser svaret fra den siste tekstblokken (etter en eventuell overgang til reservemodellen). */
+function parseVerdict(response: Anthropic.Beta.BetaMessage): z.infer<typeof verdictSchema> | null {
+  const text = response.content.findLast((block) => block.type === "text");
+  if (!text || text.type !== "text") return null;
+  try {
+    const parsed = verdictSchema.safeParse(JSON.parse(text.text));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }

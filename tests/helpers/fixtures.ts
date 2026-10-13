@@ -68,6 +68,7 @@ export function validConfig(overrides: Partial<SiteConfigInput> = {}): SiteConfi
     },
     clustering: {
       storyWindowHours: 72,
+      maxStoryHours: 168,
       sameStoryThreshold: 0.4,
       borderlineThreshold: 0.15,
       useClaudeForBorderline: false,

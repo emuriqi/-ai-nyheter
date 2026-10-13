@@ -5,10 +5,19 @@ import { cosine, type ItemText, type TermVector } from "./features";
  * like åpne saken, eller starter en ny sak. Elementene må komme i
  * tidsrekkefølge. Fremgangsmåten er klassisk «single-pass» gruppering fra
  * forskningen på Topic Detection and Tracking.
+ *
+ * To regler holder presisjonen oppe:
+ * - Bare likhet med et element fra en annen kilde kan slå sammen automatisk.
+ *   To elementer fra samme kilde ligner ofte fordi kilden bruker faste maler
+ *   (for eksempel to ulike farevarsler for samme fylke). Da avgjør Claude, og
+ *   uten Claude blir elementet en egen sak.
+ * - En sak kan ikke strekke seg over mer enn `maxStoryMs`, så ulike hendelser
+ *   på samme sted ikke lenkes sammen i det uendelige.
  */
 
 export type Member = {
   id: string;
+  sourceId: string;
   /** Publiseringstid i millisekunder. */
   time: number;
   vector: TermVector;
@@ -47,7 +56,10 @@ export type JudgeVerdict = { match: string | null; reason: string };
 export type StoryJudge = (item: ItemText, candidates: JudgeCandidate[]) => Promise<JudgeVerdict | undefined>;
 
 export type ClustererOptions = {
+  /** Hvor lenge etter sakens første eller siste kilde et nytt element kan legges til. */
   windowMs: number;
+  /** Lengste tidsrom en sak kan dekke, fra første til siste kilde. */
+  maxStoryMs: number;
   sameStoryThreshold: number;
   borderlineThreshold: number;
   judge: StoryJudge | null;
@@ -70,12 +82,27 @@ export class Clusterer {
     this.stories.push(story);
   }
 
-  /** Åpne saker sortert etter likhet med elementet, mest lik først. */
-  rank(member: Member): { story: StoryState; score: number }[] {
-    const { windowMs } = this.options;
+  /** Tar ut en sak som ikke finnes lenger (for eksempel slettet av en redaktør under kjøringen). */
+  drop(story: StoryState): void {
+    const index = this.stories.indexOf(story);
+    if (index >= 0) this.stories.splice(index, 1);
+  }
+
+  /**
+   * Åpne saker sortert etter likhet med elementet, mest lik først. `score` er
+   * likheten med det mest like elementet i saken, `crossSourceScore` det samme
+   * regnet bare mot elementer fra andre kilder.
+   */
+  rank(member: Member): RankedStory[] {
+    const { windowMs, maxStoryMs } = this.options;
     return this.stories
-      .filter((story) => member.time >= story.firstAt - windowMs && member.time <= story.lastAt + windowMs)
-      .map((story) => ({ story, score: storyScore(member, story) }))
+      .filter(
+        (story) =>
+          member.time >= story.firstAt - windowMs &&
+          member.time <= story.lastAt + windowMs &&
+          Math.max(story.lastAt, member.time) - Math.min(story.firstAt, member.time) <= maxStoryMs,
+      )
+      .map((story) => ({ story, ...storyScores(member, story) }))
       .sort((a, b) => b.score - a.score);
   }
 
@@ -86,8 +113,11 @@ export class Clusterer {
     const score = best ? best.score : null;
     const nearest = best ? best.story : null;
 
-    if (best && best.score >= sameStoryThreshold) {
-      return this.join(best.story, member, "AUTO", best.score);
+    const auto = ranked
+      .filter((r) => r.crossSourceScore >= sameStoryThreshold)
+      .sort((a, b) => b.crossSourceScore - a.crossSourceScore)[0];
+    if (auto) {
+      return this.join(auto.story, member, "AUTO", auto.crossSourceScore);
     }
     if (best && best.score >= borderlineThreshold && judge && this.judgeCalls < maxJudgeCalls) {
       const candidates = ranked.filter((r) => r.score >= borderlineThreshold).slice(0, MAX_JUDGE_CANDIDATES);
@@ -137,13 +167,20 @@ export class Clusterer {
   }
 }
 
+export type RankedStory = { story: StoryState; score: number; crossSourceScore: number };
+
 /**
  * Likheten mellom et element og en sak er likheten med det mest like
  * elementet i saken. Det fanger opp at en sak utvikler seg: et nytt element
  * trenger bare å ligne på én av de tidligere kildene.
  */
-export function storyScore(member: Member, story: StoryState): number {
-  let best = 0;
-  for (const other of story.members) best = Math.max(best, cosine(member.vector, other.vector));
-  return best;
+export function storyScores(member: Member, story: StoryState): { score: number; crossSourceScore: number } {
+  let score = 0;
+  let crossSourceScore = 0;
+  for (const other of story.members) {
+    const similarity = cosine(member.vector, other.vector);
+    score = Math.max(score, similarity);
+    if (other.sourceId !== member.sourceId) crossSourceScore = Math.max(crossSourceScore, similarity);
+  }
+  return { score, crossSourceScore };
 }

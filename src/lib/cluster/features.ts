@@ -57,24 +57,15 @@ export function tokenize(text: string): string[] {
 }
 
 /**
- * Ord med stor forbokstav som ikke står først i en setning: stort sett navn på
- * steder, etater og forkortelser (Klepp, Agder, NVE, H5N1). De skiller best
- * mellom to saker om samme tema, for eksempel to farevarsler i ulike fylker.
+ * Vektede ordfrekvenser for ett element (før IDF). Egennavn får ikke ekstra
+ * vekt: IDF gir allerede sjeldne stedsnavn høy vekt, og ekstra vekt gjorde to
+ * ulike farevarsler for samme fylke for like.
  */
-export function properNouns(text: string): string[] {
-  const found: string[] = [];
-  const pattern = /(?<![.!?:]\s*|^\s*)(?<=[\s(–])(\p{Lu}[\p{L}\p{N}]*)/gmu;
-  for (const match of text.normalize("NFKC").matchAll(pattern)) found.push(match[1]);
-  return found;
-}
-
-/** Vektede ordfrekvenser for ett element (før IDF). Egennavn teller dobbelt. */
 export function termFrequencies(item: ItemText): TermVector {
   const tf: TermVector = new Map();
   const add = (text: string | null, weight: number) => {
     if (!text) return;
     for (const token of tokenize(text)) tf.set(token, (tf.get(token) ?? 0) + weight);
-    for (const token of tokenize(properNouns(text).join(" "))) tf.set(token, (tf.get(token) ?? 0) + weight);
   };
   add(item.title, FIELD_WEIGHTS.title);
   add(item.excerpt, FIELD_WEIGHTS.excerpt);

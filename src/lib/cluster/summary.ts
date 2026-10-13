@@ -19,12 +19,12 @@ export function describeClusterStats(stats: ClusterStats): string {
   if (stats.uncertain) {
     parts.push(`${stats.uncertain} ${stats.uncertain === 1 ? "usikker" : "usikre"} bør sjekkes i admin`);
   }
-  if (stats.skipped) parts.push(`${stats.skipped} allerede gruppert av en annen prosess`);
+  if (stats.skipped) parts.push(`${stats.skipped} endret underveis og tas i neste kjøring`);
   return parts.join(", ");
 }
 
 export function describeCluster(result: ClusterResult): string {
-  return result.status === "skipped"
-    ? `Gruppering hoppet over: ${result.reason}.`
-    : `Gruppering: ${describeClusterStats(result.stats)}.`;
+  if (result.status === "skipped") return `Gruppering hoppet over: ${result.reason}.`;
+  if (result.status === "failed") return `Gruppering feilet: ${result.reason}. Elementene grupperes i neste kjøring.`;
+  return `Gruppering: ${describeClusterStats(result.stats)}.`;
 }

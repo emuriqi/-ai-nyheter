@@ -198,7 +198,21 @@ export const siteConfigSchema = z
           .int()
           .min(1)
           .max(14 * 24),
-        /** Likhet (0–1) fra og med denne grensen regnes som samme sak. */
+        /**
+         * Lengste tidsrom en sak kan dekke, fra første til siste kilde. Hindrer
+         * at ulike hendelser på samme sted lenkes sammen til én sak som aldri
+         * lukkes. En ny utvikling etter dette blir en ny sak.
+         */
+        maxStoryHours: z
+          .number()
+          .int()
+          .min(1)
+          .max(30 * 24),
+        /**
+         * Likhet (0–1) fra og med denne grensen regnes som samme sak, når
+         * likheten er med et element fra en annen kilde. Likhet med elementer
+         * fra samme kilde avgjøres som gråsone.
+         */
         sameStoryThreshold: z.number().gt(0).lt(1),
         /**
          * Likhet under denne grensen regnes alltid som en ny sak. Mellom
@@ -217,6 +231,10 @@ export const siteConfigSchema = z
       .refine((c) => c.borderlineThreshold <= c.sameStoryThreshold, {
         message: "borderlineThreshold kan ikke være høyere enn sameStoryThreshold",
         path: ["borderlineThreshold"],
+      })
+      .refine((c) => c.maxStoryHours >= c.storyWindowHours, {
+        message: "maxStoryHours kan ikke være kortere enn storyWindowHours",
+        path: ["maxStoryHours"],
       }),
 
     sources: z.array(sourceConfigSchema).min(1),

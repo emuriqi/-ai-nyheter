@@ -5,14 +5,29 @@ import { syncSourcesFromConfig } from "@/lib/sources/sync";
 import type { CorpusItem } from "./cluster-corpus";
 import { activeSource, validConfig } from "./fixtures";
 
-/** Konfigurasjon med én aktiv og én satt på pause, og gruppering uten Claude. */
-export function clusterConfig(overrides: Partial<SiteConfig["clustering"]> = {}): SiteConfig {
+/** Kildestilene i korpuset. Hver blir en egen aktiv kilde i testdatabasen. */
+export const CORPUS_SOURCES = ["varsel", "etat", "departement", "stortinget", "statistikk", "kommune", "byraa"];
+
+/**
+ * Konfigurasjon med de aktive kildene `active` og én kilde på pause («pause»),
+ * og gruppering uten Claude.
+ */
+export function clusterConfig(
+  overrides: Partial<SiteConfig["clustering"]> = {},
+  active: string[] = ["aktiv", "aktiv2"],
+): SiteConfig {
   const config = parseSiteConfig(
-    validConfig({ sources: [activeSource({ slug: "aktiv" }), activeSource({ slug: "pause", status: "PAUSED" })] }),
+    validConfig({
+      sources: [
+        ...active.map((slug) => activeSource({ slug, feedUrl: `https://example.no/${slug}/rss` })),
+        activeSource({ slug: "pause", status: "PAUSED", feedUrl: "https://example.no/pause/rss" }),
+      ],
+    }),
   );
   return { ...config, clustering: { ...config.clustering, ...overrides } };
 }
 
+/** Synkroniserer kildene og gir id per slug. */
 export async function sourceIds(db: Db, config: SiteConfig) {
   await syncSourcesFromConfig(db, config.sources);
   const sources = await db.source.findMany({ select: { id: true, slug: true } });
@@ -51,8 +66,9 @@ export async function insertItem(db: Db, sourceId: string, input: ItemInput) {
   });
 }
 
-export function insertCorpusItem(db: Db, sourceId: string, item: CorpusItem) {
-  return insertItem(db, sourceId, {
+/** Lagrer et korpuselement under kilden for kildestilen sin. */
+export function insertCorpusItem(db: Db, sourceIdBySlug: Record<string, string>, item: CorpusItem) {
+  return insertItem(db, sourceIdBySlug[item.source], {
     guid: item.id,
     title: item.title,
     excerpt: item.excerpt,

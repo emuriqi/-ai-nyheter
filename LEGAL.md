@@ -17,13 +17,14 @@ Dokumentet utvides i hver fase. Det er ikke juridisk rådgivning.
 | Kildenes bilder vises aldri (`showSourceImages: false` kan ikke endres)                    | `schema.ts`                  | ✅     |
 | Kildetekst slettes etter `retention.sourceTextDays` (30 dager). Tittel og URL beholdes for kildelisten | `retention.ts`   | ✅     |
 | En kortere sletteperiode gjelder også tekst som allerede er lagret                         | `retention.ts`               | ✅     |
+| Slettingen kjører i hver planlagte jobb, også når innhentingen eller grupperingen feiler   | `ingest/pipeline.ts`         | ✅     |
 | robots.txt (RFC 9309) sjekkes før hver henting, også for mål for omdirigeringer. Kan den ikke leses (5xx, 429, nettverksfeil), hentes ingenting | `ingest/access.ts` | ✅ |
 | TDM-reservasjoner sjekkes før hver henting: tdmrep.json, `tdm-reservation`-header og -meta, og sperre for KI-crawlere i robots.txt. tdmrep.json hentes bare når robots.txt tillater det | `ingest/access.ts` | ✅ |
 | Reserverer kilden enkeltartikler, lagres bare tittel og lenke for dem, ikke tekst. Kommer reservasjonen senere, fjernes teksten ved neste henting | `ingest/run.ts` | ✅ |
 | Bare tekst lagres. HTML, bilder og skript fjernes, og teksten kuttes etter `maxExcerptChars` og `maxTextChars` | `ingest/text.ts` | ✅ |
 | Henting av lenkede artikkelsider er avslått for alle kilder. Slås det på, hentes de bare fra kildens egne verter og bare når robots.txt og TDM tillater det | `config/site.config.ts`, `ingest/run.ts` | ✅ |
 | Høflig henting: User-Agent med kontaktadresse, betingede forespørsler, minste intervall og størrelsesgrense | `ingest/http.ts` | ✅ |
-| Elementer som er reservert mot tekst- og datautvinning, analyseres ikke i grupperingen (heller ikke lokalt) og sendes aldri til Claude. Det samme gjelder elementer fra kilder som ikke er aktive | `cluster/run.ts` | ✅ |
+| Grupperingen analyserer bare tekst som kan analyseres: elementet og kilden er ikke reservert mot tekst- og datautvinning (også reservasjoner funnet etter at elementet ble hentet), kilden er aktiv, og teksten er ikke slettet. Det gjelder nye elementer, elementer i åpne saker som kan sendes til Claude, og ordvektene. Annen tekst analyseres ikke, heller ikke lokalt | `cluster/eligibility.ts` | ✅ |
 | Grupperingen sender bare tittel og et kort utdrag (maks 600 tegn) til Claude, og bare for elementer i gråsonen | `cluster/judge.ts` | ✅ |
 | Korte, merkede og krediterte sitater (`maxQuoteWords`), ellers egne formuleringer          | Generering og moderasjon     | Fase 4 |
 | Side der rettighetshavere kan be om fjerning                                               | Kontakt / fjerning           | Fase 7 |
@@ -72,5 +73,7 @@ artikkelsidene (`allowFullTextFetch`) kan regnes som skraping, og er derfor slå
 - Til Claude sendes bare tekst fra kildene, aldri opplysninger om lesere eller brukere. I grupperingen er det bare
   tittel og et kort utdrag, og bare når likheten er i gråsonen. API-nøkkelen leses fra miljøet (`.env`), aldri fra
   koden, og testene kaller aldri API-et.
+- Ingen sider kan vises i en ramme på et annet nettsted (`X-Frame-Options: DENY` og CSP `frame-ancestors 'none'`),
+  så en innlogget redaktør ikke kan lures til å klikke på knapper i en skjult admin-side.
 - Admin bruker HTTP Basic Auth uten cookies. Tilgangen sjekkes både i `src/proxy.ts` og i datalaget
   (`requireAdmin()` i `src/lib/admin.ts`). Passordet må være tilfeldig og minst 24 tegn.
