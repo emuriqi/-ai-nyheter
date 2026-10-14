@@ -1,6 +1,12 @@
 import { headers } from "next/headers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAdminOverview, getRecentItemsForAdmin, getSourcesForAdmin, getStoriesForAdmin } from "@/lib/admin";
+import {
+  getAdminOverview,
+  getRecentItemsForAdmin,
+  getReviewQueue,
+  getSourcesForAdmin,
+  getStoriesForAdmin,
+} from "@/lib/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getDb } from "@/lib/db";
 
@@ -37,6 +43,7 @@ describe("tilgangskontroll i datalaget for admin", () => {
     ["getSourcesForAdmin", getSourcesForAdmin],
     ["getRecentItemsForAdmin", () => getRecentItemsForAdmin()],
     ["getStoriesForAdmin", () => getStoriesForAdmin()],
+    ["getReviewQueue", getReviewQueue],
   ])("%s avviser forespørsler uten innlogging før databasen leses", async (_name, fn) => {
     requestHeaders();
     await expect(fn()).rejects.toThrow("NEXT_HTTP_ERROR_FALLBACK;404");

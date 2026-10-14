@@ -127,6 +127,12 @@ export const siteConfigSchema = z
       maxQuoteWords: z.number().int().min(0).max(50),
       /** Antall uavhengige kilder som kreves for påstander om enkeltpersoner. */
       minSourcesForPersonClaims: z.number().int().min(1),
+      /**
+       * Lengste ordrekke i en artikkel som kan være lik en kilde utenfor et
+       * merket sitat. Lengre like ordrekker regnes som kopiert tekst og hindrer
+       * publisering.
+       */
+      maxCopiedWords: z.number().int().min(6).max(30),
       /** Privatpersoner navngis aldri. Kan ikke slås av. */
       neverNamePrivatePersons: z.literal(true),
       /** Kildenes bilder vises aldri. Kan ikke slås av. */
@@ -184,6 +190,35 @@ export const siteConfigSchema = z
       maxTextChars: z.number().int().min(500).max(50000),
       requestTimeoutMs: z.number().int().min(1000).max(60000),
       maxResponseBytes: z.number().int().min(10_000).max(10_000_000),
+    }),
+
+    /** Skriving av artikler med Claude. */
+    generation: z.object({
+      /** Krever ANTHROPIC_API_KEY. Uten nøkkel lages ingen artikler. */
+      enabled: z.boolean(),
+      /** Saker med færre analyserbare kilder enn dette får ingen artikkel. */
+      minSourcesPerStory: z.number().int().min(1).max(20),
+      /** Vent så lenge etter sakens siste kilde, så kilder som kommer samtidig, kommer med. */
+      settleMinutes: z
+        .number()
+        .int()
+        .min(0)
+        .max(24 * 60),
+      /** Saker som startet for mer enn så mange timer siden, får ingen ny artikkel. */
+      maxStoryAgeHours: z
+        .number()
+        .int()
+        .min(1)
+        .max(30 * 24),
+      /** Øvre grense for antall artikler per kjøring (kostnadskontroll). */
+      maxArticlesPerRun: z.number().int().min(0).max(100),
+      /** Så mange mislykkede forsøk før en sak gis opp. */
+      maxAttemptsPerStory: z.number().int().min(1).max(10),
+      /** Så mange kilder sendes til Claude for én artikkel. */
+      maxSourcesPerArticle: z.number().int().min(1).max(30),
+      /** Lengste tekst per kilde og totalt som sendes til Claude. */
+      maxSourceCharsPerItem: z.number().int().min(200).max(20_000),
+      maxSourceCharsTotal: z.number().int().min(1000).max(100_000),
     }),
 
     /** Gruppering av kildeelementer i saker. */
@@ -258,6 +293,8 @@ export type SiteConfig = z.output<typeof siteConfigSchema>;
 export type SourceConfig = z.output<typeof sourceConfigSchema>;
 export type IngestionConfig = SiteConfig["ingestion"];
 export type ClusteringConfig = SiteConfig["clustering"];
+export type GenerationConfig = SiteConfig["generation"];
+export type EditorialConfig = SiteConfig["editorial"];
 
 /** Gir typehjelp i config-filen uten å validere (valideringen skjer i parseSiteConfig). */
 export function defineSiteConfig(config: SiteConfigInput): SiteConfigInput {

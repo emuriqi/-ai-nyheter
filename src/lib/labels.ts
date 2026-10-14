@@ -2,6 +2,8 @@
 
 import type { ClusterStats } from "./cluster/run";
 import { describeClusterStats } from "./cluster/summary";
+import type { GenerateStats } from "./generate/run";
+import { describeGenerateStats } from "./generate/summary";
 
 export const SOURCE_STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Aktiv",
@@ -49,6 +51,9 @@ export function describeJobStats(type: string, stats: unknown): string {
   const s = stats as Record<string, unknown>;
   if (type === "CLUSTER" && typeof s.considered === "number") {
     return describeClusterStats(s as unknown as ClusterStats);
+  }
+  if (type === "GENERATE" && typeof s.considered === "number" && typeof s.pendingReview === "number") {
+    return describeGenerateStats(s as unknown as GenerateStats);
   }
   if (type === "PURGE") {
     return `Tekst slettet fra ${Number(s.purgedSourceItems ?? 0)} elementer`;

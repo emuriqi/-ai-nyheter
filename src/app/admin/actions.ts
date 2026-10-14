@@ -12,6 +12,7 @@ import {
   moveItem,
 } from "@/lib/cluster/manual";
 import { siteConfig } from "@/lib/config";
+import { approveArticle, regenerateArticle, rejectArticle, ReviewError, unpublishArticle } from "@/lib/generate/review";
 import { getDb } from "@/lib/db";
 import { runPipeline } from "@/lib/ingest/pipeline";
 
@@ -69,4 +70,53 @@ export async function abortClustering(): Promise<void> {
   await requireAdmin();
   await markClusteringAborted(getDb());
   redirect("/admin/saker");
+}
+
+/** Kjører en avgjørelse om en artikkel og går tilbake til godkjenningssiden med en kode for resultatet. */
+async function runReview(change: () => Promise<unknown>, success: string): Promise<never> {
+  let code = success;
+  try {
+    await change();
+  } catch (error) {
+    if (!(error instanceof ReviewError)) throw error;
+    code = error.code;
+  }
+  redirect(`/admin/godkjenning?melding=${code}`);
+}
+
+function readNote(formData: FormData): string {
+  const note = formData.get("note");
+  return typeof note === "string" ? note : "";
+}
+
+/** «Godkjenn og publiser». */
+export async function approveArticleAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const articleId = readId(formData, "articleId");
+  if (!articleId) redirect("/admin/godkjenning?melding=ugyldig");
+  await runReview(() => approveArticle(getDb(), articleId), "publisert");
+}
+
+/** «Avvis» med begrunnelse. */
+export async function rejectArticleAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const articleId = readId(formData, "articleId");
+  if (!articleId) redirect("/admin/godkjenning?melding=ugyldig");
+  await runReview(() => rejectArticle(getDb(), articleId, readNote(formData)), "avvist");
+}
+
+/** «Skriv på nytt»: sletter et utkast som aldri er publisert. */
+export async function regenerateArticleAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const articleId = readId(formData, "articleId");
+  if (!articleId) redirect("/admin/godkjenning?melding=ugyldig");
+  await runReview(() => regenerateArticle(getDb(), articleId), "skrives-paa-nytt");
+}
+
+/** «Avpubliser» med begrunnelse. */
+export async function unpublishArticleAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const articleId = readId(formData, "articleId");
+  if (!articleId) redirect("/admin/godkjenning?melding=ugyldig");
+  await runReview(() => unpublishArticle(getDb(), articleId, readNote(formData)), "avpublisert");
 }

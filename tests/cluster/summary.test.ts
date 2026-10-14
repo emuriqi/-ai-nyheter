@@ -67,7 +67,9 @@ describe("oppsummering av grupperingen", () => {
 
 describe("feilmeldinger i admin", () => {
   it("viser bare meldinger for kjente koder", () => {
-    expect(manualErrorMessage("har-artikkel")).toBe("Saken har en artikkel, så kildene kan ikke flyttes her.");
+    expect(manualErrorMessage("har-artikkel")).toBe(
+      "Saken har en publisert artikkel, så kildene kan ikke flyttes her.",
+    );
     expect(manualErrorMessage("Banken din er hacket, ring 12345678")).toBeNull();
     expect(manualErrorMessage("toString")).toBeNull();
     expect(manualErrorMessage(["har-artikkel"])).toBeNull();

@@ -1,10 +1,10 @@
 import "dotenv/config";
 import { siteConfig } from "@/lib/config";
 import { createPrismaClient } from "@/lib/db";
-import { runPipeline } from "@/lib/ingest/pipeline";
+import { pipelineFailed, runPipeline } from "@/lib/ingest/pipeline";
 import { summarizePipeline } from "@/lib/ingest/summary";
 
-// Synkroniserer kildene, henter nye elementer, grupperer dem i saker og sletter utløpt kildetekst.
+// Synkroniserer kildene, henter nye elementer, grupperer dem i saker, skriver artikler og sletter utløpt kildetekst.
 // Kjøres med `npm run ingest`.
 const db = createPrismaClient();
 try {
@@ -12,8 +12,8 @@ try {
   for (const line of summarizePipeline(result).lines) {
     console.log(line);
   }
-  // Slettingen har kjørt uansett, men en feilet gruppering skal gi feilkode.
-  if (result.cluster.status === "failed") process.exitCode = 1;
+  // Slettingen har kjørt uansett, men en feilet gruppering eller skriving skal gi feilkode.
+  if (pipelineFailed(result)) process.exitCode = 1;
 } finally {
   await db.$disconnect();
 }

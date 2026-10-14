@@ -4,11 +4,13 @@ import { checkBearerToken } from "@/lib/auth/basic-auth";
 import { runPipeline } from "@/lib/ingest/pipeline";
 
 vi.mock("@/lib/db", () => ({ getDb: vi.fn(() => ({})) }));
-vi.mock("@/lib/ingest/pipeline", () => ({
+vi.mock("@/lib/ingest/pipeline", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ingest/pipeline")>()),
   runPipeline: vi.fn(async () => ({
     sync: { created: 0, updated: 5, paused: 0 },
     ingest: { status: "done", jobId: "job", sources: [] },
     cluster: { status: "skipped", reason: "En gruppering kjører allerede" },
+    generate: { status: "skipped", reason: "Skriving er ikke satt opp (krever ANTHROPIC_API_KEY)" },
     retention: { purgedSourceItems: 0, deletedJobRuns: 0 },
   })),
 }));
@@ -76,6 +78,7 @@ describe("POST /api/cron/ingest", () => {
       sync: { created: 0, updated: 5, paused: 0 },
       ingest: { status: "done", jobId: "job", sources: [] },
       cluster: { status: "failed", reason: "disken er full" },
+      generate: { status: "skipped", reason: "Skriving er ikke satt opp (krever ANTHROPIC_API_KEY)" },
       retention: { purgedSourceItems: 2, deletedJobRuns: 0 },
     } as Awaited<ReturnType<typeof runPipeline>>);
     const response = await POST(request(`Bearer ${SECRET}`));

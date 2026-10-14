@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { requireAdmin } from "./auth/require-admin";
 import { ANALYZABLE_ITEM } from "./cluster/eligibility";
+import { type Finding, isBlocking } from "./generate/findings";
 import { STALE_JOB_MS } from "./retention";
 import { getDb } from "./db";
 
@@ -88,7 +89,7 @@ export async function getStoriesForAdmin(limit = 50) {
       workingTitle: true,
       firstSeenAt: true,
       lastSourceAt: true,
-      article: { select: { status: true } },
+      article: { select: { status: true, publishedAt: true } },
       items: {
         orderBy: [{ publishedAt: "asc" }, { fetchedAt: "asc" }],
         select: {
@@ -112,7 +113,7 @@ export async function getStoriesForAdmin(limit = 50) {
   ];
   const nearest = await db.story.findMany({
     where: { id: { in: nearestIds } },
-    select: { id: true, workingTitle: true, article: { select: { id: true } } },
+    select: { id: true, workingTitle: true, article: { select: { status: true, publishedAt: true } } },
   });
   const nearestById = new Map(nearest.map((s) => [s.id, s]));
 
@@ -131,13 +132,106 @@ export async function getStoriesForAdmin(limit = 50) {
     runningCluster,
     stories: stories.map((story) => ({
       ...story,
+      /** Har en artikkel som er eller har vært publisert: kildene kan ikke flyttes her. */
+      locked: isLocked(story.article),
       items: story.items.map(({ clusterNearestStoryId, ...item }) => {
         const near = clusterNearestStoryId ? nearestById.get(clusterNearestStoryId) : undefined;
         return {
           ...item,
-          nearest: near ? { id: near.id, workingTitle: near.workingTitle, hasArticle: near.article !== null } : null,
+          nearest: near ? { id: near.id, workingTitle: near.workingTitle, locked: isLocked(near.article) } : null,
         };
       }),
     })),
   };
+}
+
+/** En sak er låst for flytting når artikkelen er eller har vært publisert. Utkast kan flyttes (de skrives på nytt). */
+function isLocked(article: { status: string; publishedAt: Date | null } | null): boolean {
+  return article !== null && (article.publishedAt !== null || !["DRAFT", "PENDING_REVIEW"].includes(article.status));
+}
+
+const reviewArticleSelect = {
+  id: true,
+  title: true,
+  lede: true,
+  body: true,
+  status: true,
+  version: true,
+  model: true,
+  promptVersion: true,
+  publishedAt: true,
+  createdAt: true,
+  unpublishReason: true,
+  story: { select: { slug: true, workingTitle: true, sensitivity: true, sensitivityReasons: true } },
+  revisions: {
+    orderBy: { version: "desc" as const },
+    take: 1,
+    select: {
+      version: true,
+      createdAt: true,
+      moderation: {
+        select: { verdict: true, reasons: true, checkedBy: true, decision: true, decidedAt: true, decisionNote: true },
+      },
+      sources: {
+        select: {
+          sourceItem: {
+            select: { id: true, title: true, url: true, publishedAt: true, source: { select: { publisher: true } } },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * Artiklene til godkjenningssiden: de som venter, de som er avvist, og de
+ * som er publisert (for avpublisering). Kildeteksten sendes ikke til siden.
+ */
+export async function getReviewQueue() {
+  await requireAdmin();
+  await connection();
+  const db = getDb();
+  const [pending, rejected, published] = await Promise.all([
+    db.article.findMany({
+      where: { status: "PENDING_REVIEW" },
+      orderBy: { createdAt: "asc" },
+      select: reviewArticleSelect,
+    }),
+    db.article.findMany({
+      where: { status: "DRAFT" },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+      select: reviewArticleSelect,
+    }),
+    db.article.findMany({
+      where: { status: "PUBLISHED" },
+      orderBy: { publishedAt: "desc" },
+      take: 20,
+      select: reviewArticleSelect,
+    }),
+  ]);
+  const failed = await db.story.findMany({
+    where: { article: null, lastGenerationError: { not: null } },
+    orderBy: { lastGenerationAt: "desc" },
+    take: 20,
+    select: {
+      slug: true,
+      workingTitle: true,
+      generationAttempts: true,
+      lastGenerationAt: true,
+      lastGenerationError: true,
+    },
+  });
+  const shape = (a: (typeof pending)[number]) => {
+    const [latest] = a.revisions;
+    const findings = (latest?.moderation?.reasons as Finding[] | null) ?? [];
+    return {
+      ...a,
+      latest,
+      findings,
+      blocked: isBlocking(findings),
+      sources: (latest?.sources ?? []).map((s) => s.sourceItem),
+    };
+  };
+  return { pending: pending.map(shape), rejected: rejected.map(shape), published: published.map(shape), failed };
 }

@@ -26,6 +26,9 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
         <Link href="/admin/saker" className="hover:underline">
           Saker
         </Link>
+        <Link href="/admin/godkjenning" className="hover:underline">
+          Godkjenning
+        </Link>
       </nav>
       {children}
     </div>

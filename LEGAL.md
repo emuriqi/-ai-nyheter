@@ -26,7 +26,9 @@ Dokumentet utvides i hver fase. Det er ikke juridisk rådgivning.
 | Høflig henting: User-Agent med kontaktadresse, betingede forespørsler, minste intervall og størrelsesgrense | `ingest/http.ts` | ✅ |
 | Grupperingen analyserer bare tekst som kan analyseres: elementet og kilden er ikke reservert mot tekst- og datautvinning (også reservasjoner funnet etter at elementet ble hentet), kilden er aktiv, og teksten er ikke slettet. Det gjelder nye elementer, elementer i åpne saker som kan sendes til Claude, og ordvektene. Annen tekst analyseres ikke, heller ikke lokalt | `cluster/eligibility.ts` | ✅ |
 | Grupperingen sender bare tittel og et kort utdrag (maks 600 tegn) til Claude, og bare for elementer i gråsonen | `cluster/judge.ts` | ✅ |
-| Korte, merkede og krediterte sitater (`maxQuoteWords`), ellers egne formuleringer          | Generering og moderasjon     | Fase 4 |
+| Korte, merkede og krediterte sitater (`maxQuoteWords`), ellers egne formuleringer. Sitater som er for lange eller ikke står ordrett i kilden, og ordrekker på mer enn `maxCopiedWords` ord som er like en kilde, stopper publisering | `generate/checks.ts`, prompten | ✅ |
+| Artikler bygger bare på kildene, og alle kildene lenkes med kildeangivelse fra lisensen (`attribution`). Kildetekst vises aldri for lesere | `/sak/[slug]` | ✅ |
+| Til Claude sendes bare tekst som kan analyseres (samme filter som grupperingen), og bare så mye som trengs (`maxSourceCharsPerItem`, `maxSourceCharsTotal`) | `generate/sources.ts` | ✅ |
 | Side der rettighetshavere kan be om fjerning                                               | Kontakt / fjerning           | Fase 7 |
 
 Fakta er ikke opphavsrettslig beskyttet, men formuleringer er det. Derfor lagres bare teksten som trengs for
@@ -44,7 +46,12 @@ artikkelsidene (`allowFullTextFetch`) kan regnes som skraping, og er derfor slå
 - Alle sider viser at innholdet er AI-generert (`src/components/ai-notice.tsx`).
 - `Article.aiGenerated` har standardverdien `true`. Den synlige merkingen styres ikke av feltet og vises for alle
   artikler uansett.
-- Merking per artikkel og per svar i chatten, og maskinlesbar merking i metadata, kommer i fase 4 og 6.
+- Hver artikkel har synlig merking øverst (`ai.articleLabel`) og en forklaring av hvordan den ble laget (modell,
+  kontroller, godkjenning). Merkingen vises for alle artikler og styres ikke av noe felt.
+- Maskinlesbar merking: `<meta name="ai-generated" content="true">` og strukturerte data (schema.org
+  `NewsArticle` med `creator` som programvare og kildene i `isBasedOn`).
+- Modell og promptversjon lagres for hver artikkel og hver versjon.
+- Merking per svar i chatten kommer i fase 6.
 - Grupperingen (fase 3) lager ikke innhold for lesere. Der Claude har avgjort en gruppering, er det merket i admin
   med «Claude: samme sak» eller «Claude: ny sak» og Claudes begrunnelse, og hvilken promptversjon som ble brukt,
   lagres i jobbloggen.
@@ -62,7 +69,14 @@ artikkelsidene (`allowFullTextFetch`) kan regnes som skraping, og er derfor slå
   oppdateringsflyten med endringslogg i fase 5.
 - Saker om temaene i `editorial.sensitiveCategories` krever manuell godkjenning. Privatpersoner navngis aldri
   (`neverNamePrivatePersons: true` kan ikke endres). Påstander om enkeltpersoner krever minst
-  `minSourcesForPersonClaims` uavhengige kilder. Håndheves i moderasjonssteget i fase 4.
+  `minSourcesForPersonClaims` uavhengige kilder. Håndheves slik: en navngitt privatperson stopper publisering
+  (fanges av skriverens egen liste og av modereringen), sensitive temaer flagger alltid artikkelen for manuell
+  godkjenning, og personer med færre kilder flagges for redaktøren.
+- Alle artikler godkjennes av redaktøren før publisering (`manualApproval: "ALL"`). Artikler som bryter faste regler,
+  kan ikke godkjennes. Publiserte artikler avpubliseres med begrunnelse, som føres i endringsloggen. Admin varsler
+  så lenge ansvarlig redaktør ikke er utpekt.
+- Hver artikkel kontrolleres to ganger mot kildene: automatisk (sitater, kopiert tekst, tall, kilder, personer) og av
+  en egen AI-moderering. Alle funn lagres og vises for redaktøren.
 
 ## Personvern (GDPR, personopplysningsloven) og cookies (ekomloven)
 
@@ -71,7 +85,8 @@ artikkelsidene (`allowFullTextFetch`) kan regnes som skraping, og er derfor slå
 - Ingen analyse-cookies (`analytics: "NONE"`). Bare cookiefri analyse kan slås på.
 - Anthropic er oppført som databehandler i `privacy.dataProcessors`. Personvernerklæringen kommer i fase 7.
 - Til Claude sendes bare tekst fra kildene, aldri opplysninger om lesere eller brukere. I grupperingen er det bare
-  tittel og et kort utdrag, og bare når likheten er i gråsonen. API-nøkkelen leses fra miljøet (`.env`), aldri fra
+  tittel og et kort utdrag, og bare når likheten er i gråsonen. Ved skriving og moderering sendes kildeteksten til
+  saken, begrenset av budsjettet i `generation`. API-nøkkelen leses fra miljøet (`.env`), aldri fra
   koden, og testene kaller aldri API-et.
 - Ingen sider kan vises i en ramme på et annet nettsted (`X-Frame-Options: DENY` og CSP `frame-ancestors 'none'`),
   så en innlogget redaktør ikke kan lures til å klikke på knapper i en skjult admin-side.

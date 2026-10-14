@@ -110,14 +110,53 @@ describe("manuell flytting av elementer", () => {
     });
   });
 
-  it("endrer ikke saker som har en artikkel", async () => {
+  it("endrer ikke saker med en artikkel som er eller har vært publisert", async () => {
     await db.article.create({
-      data: { storyId: ids.flom, title: "T", lede: "L", body: "B", model: "m", promptVersion: "p" },
+      data: {
+        storyId: ids.flom,
+        title: "T",
+        lede: "L",
+        body: "B",
+        model: "m",
+        promptVersion: "p",
+        status: "PUBLISHED",
+        publishedAt: T3,
+      },
     });
     await expect(detachItem(db, ids.b, NOW)).rejects.toEqual(code("har-artikkel"));
     await expect(moveItem(db, ids.c, ids.flom, NOW)).rejects.toEqual(code("har-artikkel"));
     await expect(moveItem(db, ids.a, ids.sno, NOW)).rejects.toEqual(code("har-artikkel"));
+    // Også etter avpublisering.
+    await db.article.update({ where: { storyId: ids.flom }, data: { status: "UNPUBLISHED" } });
+    await expect(detachItem(db, ids.b, NOW)).rejects.toEqual(code("har-artikkel"));
     expect(await db.sourceItem.count({ where: { storyId: ids.flom } })).toBe(2);
+  });
+
+  it("sletter et upublisert utkast når kildene flyttes, så saken skrives på nytt", async () => {
+    await db.article.create({
+      data: {
+        storyId: ids.flom,
+        title: "T",
+        lede: "L",
+        body: "B",
+        model: "m",
+        promptVersion: "p",
+        status: "PENDING_REVIEW",
+      },
+    });
+    await db.story.update({ where: { id: ids.flom }, data: { generationAttempts: 2 } });
+    await moveItem(db, ids.c, ids.flom, NOW);
+    expect(await db.article.findUnique({ where: { storyId: ids.flom } })).toBeNull();
+    expect(await db.story.findUniqueOrThrow({ where: { id: ids.flom } })).toMatchObject({ generationAttempts: 0 });
+
+    // Et utkast i saken som blir tom, slettes før saken slettes.
+    await db.article.create({
+      data: { storyId: ids.flom, title: "T", lede: "L", body: "B", model: "m", promptVersion: "p" },
+    });
+    const sno = await db.story.create({ data: { slug: "sno-2", workingTitle: "Snø" } });
+    for (const id of [ids.a, ids.b]) await moveItem(db, id, sno.id, NOW).catch(() => undefined);
+    await moveItem(db, ids.c, sno.id, NOW);
+    expect(await db.story.findUnique({ where: { id: ids.flom } })).toBeNull();
   });
 
   it("endrer ingenting mens grupperingen kjører", async () => {

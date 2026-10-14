@@ -80,6 +80,7 @@ describe("runPipeline", () => {
       "aktiv: hentet, 3 nye, 1 for gamle",
       "sperret: sperret, robots.txt sperrer /rss",
       "Gruppering: 4 elementer, 4 nye saker, 0 lagt til eksisterende saker, 1 usikker bør sjekkes i admin.",
+      "Skriving hoppet over: Skriving er slått av i konfigurasjonen.",
       "Sletting: kildetekst fjernet fra 1 elementer, 0 gamle jobblogger slettet.",
     ]);
   });

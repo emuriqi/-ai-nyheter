@@ -23,7 +23,8 @@
     "db:check": "prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code",
     "purge": "tsx scripts/purge-expired.ts",
     "ingest": "tsx scripts/ingest.ts",
-    "eval:cluster": "tsx scripts/eval-clustering.ts"
+    "eval:cluster": "tsx scripts/eval-clustering.ts",
+    "eval:generate": "tsx scripts/eval-generation.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.133.0",

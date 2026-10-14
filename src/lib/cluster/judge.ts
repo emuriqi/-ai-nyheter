@@ -1,13 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import {
-  type ClaudeUsage,
-  describeClaudeError,
-  emptyUsage,
-  isFatalClaudeError,
-  SERVER_SIDE_FALLBACK_BETA,
-} from "../ai/claude";
+import { type ClaudeUsage, emptyUsage } from "../ai/claude";
 import { loadPrompt } from "../ai/prompts";
+import { callStructured, escapeTags } from "../ai/structured";
 import { truncate } from "../ingest/text";
 import type { JudgeCandidate, StoryJudge } from "./assign";
 import type { ItemText } from "./features";
@@ -33,11 +28,6 @@ export const VERDICT_JSON_SCHEMA = {
 } as const;
 
 const verdictSchema = z.object({ sak: z.enum(VERDICT_KEYS), begrunnelse: z.string() });
-
-/** Teksten fra kildene kan ikke lage egne tagger i meldingen til Claude. */
-function escapeTags(text: string): string {
-  return text.replace(/</g, "‹").replace(/>/g, "›");
-}
 
 function describeItem(item: ItemText): string {
   const text = item.excerpt ?? item.bodyText ?? "";
@@ -68,36 +58,27 @@ export function createClaudeJudge(client: Anthropic, model: string): ClaudeJudge
 
   const judge: StoryJudge = async (item, candidates) => {
     if (disabled || candidates.length === 0) return undefined;
-    usage.calls++;
-    let response: Anthropic.Beta.BetaMessage;
-    try {
-      response = await client.beta.messages.create({
+    const result = await callStructured(
+      client,
+      {
         model,
-        max_tokens: MAX_TOKENS,
-        betas: [SERVER_SIDE_FALLBACK_BETA],
-        fallbacks: "default",
-        // Klassifisering trenger lite resonnering.
-        output_config: { effort: "low", format: { type: "json_schema", schema: VERDICT_JSON_SCHEMA } },
         system: prompt.text,
-        messages: [{ role: "user", content: buildJudgeMessage(item, candidates) }],
-      });
-    } catch (error) {
-      usage.failures++;
-      if (isFatalClaudeError(error)) disabled = true;
-      console.warn(`Claude-vurdering feilet: ${describeClaudeError(error)}`);
+        user: buildJudgeMessage(item, candidates),
+        jsonSchema: VERDICT_JSON_SCHEMA,
+        parser: verdictSchema,
+        // Klassifisering trenger lite resonnering.
+        effort: "low",
+        maxTokens: MAX_TOKENS,
+      },
+      usage,
+    );
+    if (!result.ok) {
+      if (result.fatal) disabled = true;
+      console.warn(`Claude-vurdering ${result.reason}`);
       return undefined;
     }
-
-    // Tokenene telles også når svaret ikke kan brukes; de er betalt.
-    usage.inputTokens += response.usage.input_tokens;
-    usage.outputTokens += response.usage.output_tokens;
-    if (response.stop_reason !== "end_turn") {
-      usage.failures++;
-      console.warn(`Claude-vurdering uten svar: stop_reason ${response.stop_reason ?? "mangler"}`);
-      return undefined;
-    }
-    const verdict = parseVerdict(response);
-    if (!verdict || (verdict.sak !== "ingen" && !candidates.some((c) => c.key === verdict.sak))) {
+    const verdict = result.data;
+    if (verdict.sak !== "ingen" && !candidates.some((c) => c.key === verdict.sak)) {
       usage.failures++;
       console.warn("Claude-vurdering uten svar: svaret kunne ikke tolkes");
       return undefined;
@@ -109,16 +90,4 @@ export function createClaudeJudge(client: Anthropic, model: string): ClaudeJudge
   };
 
   return { judge, usage, promptVersion: prompt.version };
-}
-
-/** Leser svaret fra den siste tekstblokken (etter en eventuell overgang til reservemodellen). */
-function parseVerdict(response: Anthropic.Beta.BetaMessage): z.infer<typeof verdictSchema> | null {
-  const text = response.content.findLast((block) => block.type === "text");
-  if (!text || text.type !== "text") return null;
-  try {
-    const parsed = verdictSchema.safeParse(JSON.parse(text.text));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
 }

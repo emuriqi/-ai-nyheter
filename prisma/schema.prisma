@@ -136,35 +136,35 @@ model Source {
 
 /// Én artikkel eller ett element hentet fra en kilde.
 model SourceItem {
-  id            String         @id @default(cuid())
-  sourceId      String
+  id                    String         @id @default(cuid())
+  sourceId              String
   /// Feedens egen id, eller URL hvis feeden mangler id. Hindrer duplikater.
-  guid          String
-  url           String
-  title         String
-  publishedAt   DateTime?
-  fetchedAt     DateTime       @default(now())
+  guid                  String
+  url                   String
+  title                 String
+  publishedAt           DateTime?
+  fetchedAt             DateTime       @default(now())
   /// Kort utdrag fra feeden. Slettes etter deleteAfter.
-  excerpt       String?
+  excerpt               String?
   /// Teksten som brukes til generering og chat. Slettes etter deleteAfter.
-  bodyText      String?
+  bodyText              String?
   /// true når kilden har reservert elementet mot tekst- og datautvinning.
   /// Da lagres bare tittel og lenke, aldri tekst.
-  tdmReserved   Boolean        @default(false)
+  tdmReserved           Boolean        @default(false)
   /// Hash av teksten, brukes til å oppdage endringer. Beholdes etter sletting.
-  contentHash   String?
-  language      String
+  contentHash           String?
+  language              String
   /// Tidspunkt da kildeteksten skal slettes (fetchedAt + sletteperiode).
-  deleteAfter   DateTime
-  purgedAt      DateTime?
-  storyId       String?
+  deleteAfter           DateTime
+  purgedAt              DateTime?
+  storyId               String?
   /// Når elementet ble koblet til saken, hvordan, og hvor likt det var
   /// den mest like saken (cosinuslikhet 0–1, null hvis ingen sak var åpen).
-  clusteredAt   DateTime?
-  clusterMethod ClusterMethod?
-  clusterScore  Float?
+  clusteredAt           DateTime?
+  clusterMethod         ClusterMethod?
+  clusterScore          Float?
   /// Claudes korte begrunnelse når grupperingen ble avgjort av Claude.
-  clusterNote   String?
+  clusterNote           String?
   /// Når elementet startet en ny sak: den åpne saken det lignet mest på.
   /// Vises i admin så en redaktør kan flytte elementet dit. Ingen fremmednøkkel;
   /// saken kan ha blitt slettet siden.
@@ -181,18 +181,23 @@ model SourceItem {
 
 /// En sak som samler kildeartikler om det samme.
 model Story {
-  id                 String      @id @default(cuid())
-  slug               String      @unique
+  id                  String      @id @default(cuid())
+  slug                String      @unique
   /// Intern arbeidstittel fra grupperingen. Vises ikke for lesere.
-  workingTitle       String
-  category           String?
-  sensitivity        Sensitivity @default(NORMAL)
+  workingTitle        String
+  category            String?
+  sensitivity         Sensitivity @default(NORMAL)
   /// Hvorfor saken er merket som sensitiv (liste med begrunnelser).
-  sensitivityReasons Json?
-  firstSeenAt        DateTime    @default(now())
-  lastSourceAt       DateTime    @default(now())
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  sensitivityReasons  Json?
+  firstSeenAt         DateTime    @default(now())
+  lastSourceAt        DateTime    @default(now())
+  /// Mislykkede forsøk på å skrive artikkel. Saken gis opp etter maxAttemptsPerStory.
+  generationAttempts  Int         @default(0)
+  lastGenerationAt    DateTime?
+  /// Kort, ikke-sensitiv beskrivelse av siste feil (vises i admin).
+  lastGenerationError String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
   items   SourceItem[]
   article Article?
@@ -280,6 +285,8 @@ model ModerationReview {
   checkedBy    Actor
   model        String?
   decision     ModerationDecision @default(PENDING)
+  /// Hvem som tok avgjørelsen: ADMIN (redaktøren) eller SYSTEM (automatisk publisering uten funn).
+  decidedBy    Actor?
   decidedAt    DateTime?
   decisionNote String?
   createdAt    DateTime           @default(now())

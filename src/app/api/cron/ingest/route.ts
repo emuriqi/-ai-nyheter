@@ -1,11 +1,11 @@
 import { checkBearerToken } from "@/lib/auth/basic-auth";
 import { siteConfig } from "@/lib/config";
 import { getDb } from "@/lib/db";
-import { runPipeline } from "@/lib/ingest/pipeline";
+import { pipelineFailed, runPipeline } from "@/lib/ingest/pipeline";
 import { summarizePipeline } from "@/lib/ingest/summary";
 
 /**
- * Kjører innhenting, gruppering og sletting. Kalles av en cron-jobb:
+ * Kjører innhenting, gruppering, skriving og sletting. Kalles av en cron-jobb:
  *
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<vert>/api/cron/ingest
  *
@@ -27,8 +27,8 @@ export async function POST(request: Request) {
   }
 
   const result = await runPipeline(getDb(), { config: siteConfig, trigger: "cron" });
-  const { lines, ingest, cluster, retention } = summarizePipeline(result);
-  // Slettingen har kjørt uansett, men en feilet gruppering skal synes i overvåkingen.
-  const ok = cluster.status !== "failed";
-  return Response.json({ ok, summary: lines, ingest, cluster, retention }, { status: ok ? 200 : 500 });
+  const { lines, ingest, cluster, generate, retention } = summarizePipeline(result);
+  // Slettingen har kjørt uansett, men en feilet gruppering eller skriving skal synes i overvåkingen.
+  const ok = !pipelineFailed(result);
+  return Response.json({ ok, summary: lines, ingest, cluster, generate, retention }, { status: ok ? 200 : 500 });
 }

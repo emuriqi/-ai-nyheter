@@ -43,6 +43,8 @@ export default defineSiteConfig({
     ],
     maxQuoteWords: 20,
     minSourcesForPersonClaims: 2,
+    // Like ordrekker på mer enn 12 ord utenfor sitat regnes som kopiert.
+    maxCopiedWords: 12,
     neverNamePrivatePersons: true,
     showSourceImages: false,
   },
@@ -78,6 +80,24 @@ export default defineSiteConfig({
     maxTextChars: 20000,
     requestTimeoutMs: 15000,
     maxResponseBytes: 2_000_000,
+  },
+
+  /**
+   * Skriving av artikler med Claude (modellen står under ai). Alle artikler
+   * kontrolleres automatisk og av en egen moderering før de går til
+   * godkjenning, se editorial.manualApproval.
+   */
+  generation: {
+    // Krever ANTHROPIC_API_KEY. Uten nøkkel lages ingen artikler.
+    enabled: true,
+    minSourcesPerStory: 1,
+    settleMinutes: 30,
+    maxStoryAgeHours: 72,
+    maxArticlesPerRun: 5,
+    maxAttemptsPerStory: 3,
+    maxSourcesPerArticle: 12,
+    maxSourceCharsPerItem: 4000,
+    maxSourceCharsTotal: 24000,
   },
 
   /**

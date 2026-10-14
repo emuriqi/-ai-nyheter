@@ -28,7 +28,16 @@ describe("getStoriesForAdmin", () => {
     const ids = await sourceIds(db, clusterConfig());
     const near = await db.story.create({ data: { slug: "flom", workingTitle: "Flom i Agder", lastSourceAt: T } });
     await db.article.create({
-      data: { storyId: near.id, title: "T", lede: "L", body: "B", model: "m", promptVersion: "p" },
+      data: {
+        storyId: near.id,
+        title: "T",
+        lede: "L",
+        body: "B",
+        model: "m",
+        promptVersion: "p",
+        status: "PUBLISHED",
+        publishedAt: T,
+      },
     });
     const own = await db.story.create({ data: { slug: "sandsekker", workingTitle: "Sandsekker", lastSourceAt: T } });
     await insertItem(db, ids.aktiv, {
@@ -62,10 +71,13 @@ describe("getStoriesForAdmin", () => {
   it("viser saken elementet lignet mest på, og om den har artikkel", async () => {
     const { stories } = await getStoriesForAdmin();
     const own = stories.find((s) => s.slug === "sandsekker")!;
-    expect(own.article).toBeNull();
+    expect(own).toMatchObject({ article: null, locked: false });
     expect(own.items[0]).toMatchObject({ clusterMethod: "NEW", clusterScore: 0.3 });
-    expect(own.items[0].nearest).toMatchObject({ workingTitle: "Flom i Agder", hasArticle: true });
-    expect(stories.find((s) => s.slug === "flom")!.article).toEqual({ status: "DRAFT" });
+    expect(own.items[0].nearest).toMatchObject({ workingTitle: "Flom i Agder", locked: true });
+    expect(stories.find((s) => s.slug === "flom")).toMatchObject({
+      article: { status: "PUBLISHED", publishedAt: T },
+      locked: true,
+    });
   });
 
   it("sender ikke kildeteksten til siden", async () => {

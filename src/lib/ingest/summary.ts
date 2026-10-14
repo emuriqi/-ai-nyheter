@@ -1,4 +1,5 @@
 import { describeCluster } from "../cluster/summary";
+import { describeGenerate } from "../generate/summary";
 import type { runPipeline } from "./pipeline";
 import type { SourceRunResult } from "./run";
 
@@ -24,7 +25,7 @@ export function describeSource(result: SourceRunResult): string {
 
 /** Oppsummering av en hel kjøring som JSON-vennlig objekt (cron-ruten) og tekstlinjer (script). */
 export function summarizePipeline(result: Awaited<ReturnType<typeof runPipeline>>) {
-  const { sync, ingest, cluster, retention } = result;
+  const { sync, ingest, cluster, generate, retention } = result;
   const lines = [`Kilder synkronisert: ${sync.created} nye, ${sync.updated} oppdatert, ${sync.paused} satt på pause.`];
   if (ingest.status === "skipped") {
     lines.push(`Innhenting hoppet over: ${ingest.reason}.`);
@@ -34,8 +35,9 @@ export function summarizePipeline(result: Awaited<ReturnType<typeof runPipeline>
     lines.push(...ingest.sources.map(describeSource));
   }
   lines.push(describeCluster(cluster));
+  lines.push(describeGenerate(generate));
   lines.push(
     `Sletting: kildetekst fjernet fra ${retention.purgedSourceItems} elementer, ${retention.deletedJobRuns} gamle jobblogger slettet.`,
   );
-  return { lines, sync, ingest, cluster, retention };
+  return { lines, sync, ingest, cluster, generate, retention };
 }

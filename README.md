@@ -19,7 +19,7 @@ AI-forordning). Juridiske hensyn styrer designet, og alle juridisk relevante inn
 | 1    | Oppsett, datamodell og juridisk konfigurasjon | ✅ Ferdig |
 | 2    | Innhenting fra RSS og åpne API-er             | ✅ Ferdig |
 | 3    | Gruppering av kildeartikler til saker         | ✅ Ferdig |
-| 4    | Artikkelgenerering med moderasjonssteg        | Planlagt  |
+| 4    | Artikkelgenerering med moderasjonssteg        | ✅ Ferdig |
 | 5    | Oppdatering og endringslogg                   | Planlagt  |
 | 6    | Chat per sak                                  | Planlagt  |
 | 7    | Juridiske sider og personvern                 | Planlagt  |
@@ -33,7 +33,8 @@ AI-forordning). Juridiske hensyn styrer designet, og alle juridisk relevante inn
 - **zod** for validering av konfigurasjonen
 - **Vitest** for tester
 - **Claude API** (`claude-sonnet-5-5`) via Anthropics offisielle TypeScript-SDK (`@anthropic-ai/sdk`). Brukes i
-  grupperingen fra fase 3 og til generering fra fase 4. Alt fungerer uten nøkkel, bare med færre automatiske avgjørelser.
+  grupperingen fra fase 3 og til skriving og moderering av artikler fra fase 4. Uten nøkkel virker innhenting og
+  gruppering, men ingen artikler skrives.
 
 ## Kom i gang
 
@@ -71,12 +72,12 @@ datalaget (`src/lib/admin.ts`), siden en sjekk i layouten ikke hindrer at sidens
                       robots.txt,                 TF-IDF lokalt,  │
                       TDM-sjekk                   Claude i        │
                                                   gråsonen        ▼
-                                               Generering ─► Moderasjon ─► Article (+ ArticleRevision)
-                                               (fase 4)      AI-kontroll   publisert eller til
-                                                             mot kildene   manuell godkjenning
-                                                                          │
-                       Slettejobb: fjerner kildetekst etter N dager      ▼
-                       (tittel og URL beholdes for kildelisten)     Artikkelside + chat (fase 6)
+                                    Skriving (Claude) ─► Kontroller ─► Article + ArticleRevision
+                                                         automatiske     │  til godkjenning i admin
+                                                         + AI-moderering ▼
+                       Slettejobb: fjerner kildetekst       /sak/[slug] med kilder, AI-merking
+                       etter N dager (tittel og URL         og endringslogg (chat i fase 6)
+                       beholdes for kildelisten)
 ```
 
 ### Innhenting (fase 2)
@@ -191,6 +192,56 @@ Kall til Claude bruker `fallbacks: "default"` (beta `server-side-fallback-2026-0
 forespørsel, kjører API-et den på nytt med reservemodellen Anthropic anbefaler for den typen avslag, i samme kall.
 Hver kjøring lagrer antall kall og tokens i jobbloggen, også for svar som ikke kunne brukes.
 
+### Skriving og moderering (fase 4)
+
+Etter grupperingen skrives artikler for saker som er klare (`src/lib/generate/`):
+
+1. **Hvilke saker.** Saker uten artikkel, med minst `minSourcesPerStory` kilder som kan analyseres, som ikke har
+   fått nye kilder de siste `settleMinutes` minuttene, og som startet for mindre enn `maxStoryAgeHours` timer siden.
+   Høyst `maxArticlesPerRun` per kjøring, og en sak gis opp etter `maxAttemptsPerStory` mislykkede forsøk.
+2. **Kildene.** Bare tekst som kan analyseres (samme filter som grupperingen), nummerert K1, K2 … i tidsrekkefølge,
+   med utgiver og publiseringstid, kuttet etter `maxSourceCharsPerItem` og `maxSourceCharsTotal`. Teksten kan ikke
+   lage egne tagger i meldingen, og prompten sier at den er data, ikke instruksjoner.
+3. **Skriving.** Claude (`prompts/article-write.md`) skriver tittel, ingress og brødtekst på bokmål, og fyller ut
+   kategori, sensitive temaer, personer med rolle og kilder, hvilke kilder artikkelen bygger på, og merknader om
+   usikkerhet. Svaret er strukturert output med JSON-skjema (kategorier og sensitive temaer som enum).
+4. **Automatiske kontroller** (`checks.ts`), uavhengig av Claude:
+   - direkte sitater lengre enn `maxQuoteWords` ord, eller som ikke står ordrett i en kilde
+   - ordrekker på mer enn `maxCopiedWords` ord som er like en kilde utenfor sitat
+   - tall som ikke står i kildene (eller i publiseringsdatoene)
+   - kilder som ikke finnes, privatpersoner, personer med færre enn `minSourcesForPersonClaims` kilder
+   - lenker, HTML, kildehenvisninger i teksten og lengde
+5. **AI-moderering.** Et eget kall med egen prompt (`prompts/article-moderate.md`) sammenligner artikkelen setning
+   for setning med kildene og rapporterer udokumenterte påstander, feil gjengivelser, tall og sitater uten kilde,
+   kopiert tekst, privatpersoner, sensitive temaer, spekulasjon og ubalanse.
+6. **Vurdering.** Funnene samles med alvorsgrad. *Blokkerer* (for langt eller oppdiktet sitat, kopiert tekst,
+   privatperson, ukjent kilde) betyr at artikkelen ikke kan publiseres. *Høy* og *middels* flagger artikkelen.
+   Sensitive temaer (Vær Varsom) flagger alltid, og det samme gjør en moderering som ikke kunne kjøre.
+   Med `manualApproval: "ALL"` (standard) går alt til godkjenning; med `"FLAGGED_ONLY"` publiseres bare artikler
+   uten funn automatisk.
+7. **Lagring.** Artikkel, første versjon (`ArticleRevision`), kildene den bygger på (`RevisionSource`) og
+   modereringen (`ModerationReview` med alle funn) lagres i én transaksjon, sammen med modell og promptversjon.
+
+Admin-siden **Godkjenning** viser hver artikkel med funnene gruppert («Hindrer publisering», «Må vurderes», «Til
+orientering»), teksten og kildene. Redaktøren kan godkjenne og publisere, avvise med begrunnelse, eller slette
+utkastet så saken skrives på nytt. Publiserte artikler kan avpubliseres med begrunnelse; det føres som en ny versjon
+i endringsloggen. Saker der skrivingen feilet, vises med årsak. Flyttes kildene til en sak med et upublisert utkast
+(under Saker), slettes utkastet og skrives på nytt.
+
+Den offentlige artikkelsiden **/sak/[slug]** viser bare publiserte artikler, med AI-merking øverst, kildene med
+lenke og kildeangivelse, «Slik ble saken laget» (modell, kontroller og om redaktøren godkjente) og endringslogg.
+Siden har maskinlesbar merking: `<meta name="ai-generated" content="true">` og strukturerte data (schema.org
+`NewsArticle` med `creator` som programvare og `isBasedOn` med kildene). En sak uten publisert artikkel gir siden
+«fant ikke» med `noindex`.
+
+Kontrollene er testet på syntetiske artikler (`tests/fixtures/generated-articles.json`): for tre saker i korpuset
+én god artikkel og fem varianter med hver sin innplantede feil (oppdiktet tall, for langt sitat, oppdiktet sitat,
+kopiert setning, navngitt privatperson). De gode artiklene gir ingen funn, og alle 15 feilene fanges
+(`npm run eval:generate`). Hvor godt Claude skriver og modererer, testes med `npm run eval:generate -- --claude`
+(krever nøkkel, seks kall). To begrensninger: tallkontrollen sammenligner tall som tegn, så et oppdiktet tall som
+tilfeldigvis står et annet sted i kildene, slipper gjennom; og hvem som er privatperson, avgjøres av skriveren og
+modereringen, ikke av de automatiske kontrollene.
+
 ### Mappestruktur
 
 ```
@@ -201,11 +252,14 @@ prisma/seed.ts             Synkroniserer kildene fra konfigurasjonen til databas
 scripts/ingest.ts          Kjører innhenting og sletting (npm run ingest)
 scripts/purge-expired.ts   Sletter kildetekst som har passert sletteperioden
 scripts/eval-clustering.ts Måler grupperingen på testkorpuset (npm run eval:cluster)
+scripts/eval-generation.ts Kjører kontrollene på testartiklene, og med --claude ekte skriving (npm run eval:generate)
 prompts/                   Promptene til Claude, én fil per oppgave
-src/app/                   Sider og API-ruter (forside, /admin, /api/cron/ingest, /api/health)
+src/app/                   Sider og API-ruter (forside, /sak/[slug], /admin, /api/cron/ingest, /api/health)
 src/lib/ingest/            Innhenting: HTTP, robots.txt/TDM, feed-parser, adaptere, jobben
 src/lib/cluster/           Gruppering: tekstanalyse, plassering, Claude i gråsonen, jobben, manuell flytting
-src/lib/ai/                Claude-klient og lasting av prompter
+src/lib/generate/          Skriving: kildeforberedelse, Claude-skriver og -moderator, kontroller, vurdering, jobben, godkjenning
+src/lib/ai/                Claude-klient, strukturerte kall og lasting av prompter
+src/lib/markdown.ts        Trygg tolkning av brødteksten (avsnitt, mellomtitler, lister)
 src/lib/config/            zod-skjema og validert konfigurasjon
 src/lib/retention.ts       Sletteregler for kildetekst og jobblogg
 src/lib/sources/sync.ts    Synkronisering av kilder
@@ -220,11 +274,11 @@ tests/                     Vitest-tester
 | ------------------ | ------------------------------------------------------------------------------------------- |
 | `Source`           | En kilde med lisens, vilkår og status. Konfigurasjonen er fasit.                            |
 | `SourceItem`       | Én hentet artikkel. Teksten slettes etter sletteperioden, men tittel og URL beholdes. Lagrer også hvordan elementet ble gruppert (metode, likhet, Claudes begrunnelse). |
-| `Story`            | En sak som samler kildeartikler. Kan ikke slettes så lenge den har en artikkel.            |
+| `Story`            | En sak som samler kildeartikler, med kategori, sensitivitet og forsøk på å skrive artikkel. Kan ikke slettes så lenge den har en artikkel. |
 | `Article`          | Gjeldende versjon av artikkelen: status, versjon, «Rettet»-merking og AI-merking.           |
 | `ArticleRevision`  | Endringsloggen. Hver versjon er et fullt øyeblikksbilde med hva som endret seg og hvorfor. |
 | `RevisionSource`   | Hvilke kildeartikler hver versjon bygger på.                                               |
-| `ModerationReview` | AI-kontroll av en versjon mot kildene, og eventuell manuell godkjenning.                  |
+| `ModerationReview` | Kontrollen av en versjon: alle funn, vurdering, og hvem som godkjente eller avviste.      |
 | `JobRun`           | Logg over kjøringer av innhenting, gruppering, generering og sletting.                     |
 
 Det finnes bevisst ingen tabell for chatter. Chatter lagres ikke som standard.
@@ -254,8 +308,9 @@ NRK og kommersielle mediehus er valgt bort fordi vilkårene deres ikke tillater 
 | `npm run check`      | Lint, typesjekk, tester og sjekk av at migreringene matcher skjemaet |
 | `npm test`           | Tester                                                               |
 | `npm run db:migrate` | Ny migrering etter endring i `prisma/schema.prisma`                  |
-| `npm run ingest`     | Synkroniserer kildene, henter fra aktive kilder, grupperer og sletter gammel tekst |
+| `npm run ingest`     | Synkroniserer kildene, henter fra aktive kilder, grupperer, skriver artikler og sletter gammel tekst |
 | `npm run eval:cluster` | Måler grupperingen på testkorpuset. Med `-- --claude` brukes Claude i gråsonen |
+| `npm run eval:generate` | Kjører kontrollene på testartiklene. Med `-- --claude` skriver og modererer Claude |
 | `npm run db:seed`    | Synkroniserer kildene fra konfigurasjonen                            |
 | `npm run db:reset`   | Nullstiller databasen, kjører migreringene og synkroniserer kildene  |
 | `npm run purge`      | Sletter kildetekst som har passert sletteperioden                    |
@@ -285,9 +340,18 @@ aldri mot nettet: innhentingen testes med en falsk `fetch` og syntetiske eksempe
   er brukt opp, og at feil i oppsettet av Claude ikke stopper jobben
 - manuell flytting i admin: skill ut, flytt, angre, ny arbeidstittel, ikke for saker med artikkel og ikke mens
   grupperingen kjører, og at feilmeldinger bare vises fra en fast liste med koder
-- hele pipelinen mot en ekte database: synkronisering, innhenting, gruppering, sletting av utløpt tekst og
-  oppsummeringen, og at slettingen kjører selv om innhentingen eller grupperingen feiler
-- knappene «Kjør innhenting nå», «Skill ut» og «Flytt» (tilgangssjekk i server actions, validering og feilmeldinger)
+- skriving og moderering: kontrollene på de syntetiske artiklene (alle innplantede feil fanges, de gode gir ingen
+  funn) og hver kontroll for seg, den samlede vurderingen, kildene Claude får (rekkefølge, budsjett, uten mulighet til
+  å lage tagger), skriver- og moderatorkallet med ekte SDK-klient (prompt med innstillingene, skjema med enum,
+  avslag, ugyldige svar), og jobben mot en ekte database (hvilke saker som er klare, lagring av artikkel, versjon,
+  kilder og moderering, automatisk publisering bare uten funn, feil og nye forsøk, samtidige prosesser)
+- godkjenning: publisering, avvisning, ny skriving og avpublisering med endringslogg, at artikler som bryter faste
+  regler ikke kan publiseres, og at bare publiserte artikler vises for lesere
+- brødteksten: avsnitt, mellomtitler og lister, og at HTML vises som tekst
+- hele pipelinen mot en ekte database: synkronisering, innhenting, gruppering, skriving, sletting av utløpt tekst og
+  oppsummeringen, og at slettingen kjører selv om et steg feiler
+- knappene i admin: «Kjør innhenting nå», «Skill ut», «Flytt», «Marker som avbrutt», «Godkjenn og publiser», «Avvis»,
+  «Skriv på nytt» og «Avpubliser» (tilgangssjekk i server actions, validering og meldinger bare fra faste koder)
 - cron-ruten og Bearer-tokenet
 - tilgangskontroll for admin: hvilke ruter proxyen dekker, svarene den gir, at admin ikke kan rammes inn av andre
   nettsteder, krav til passord og at datalaget avviser forespørsler uten gyldig innlogging før databasen leses

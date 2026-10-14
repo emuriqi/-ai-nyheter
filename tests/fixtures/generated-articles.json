@@ -1,0 +1,543 @@
+{
+  "_info": "SYNTETISKE artikler skrevet av KI-agenter fra kildene i cluster-corpus.json, for testing av kontrollene. For hver sak: én god artikkel og fem varianter med nøyaktig én innplantet feil (beskrevet i 'beskrivelse'). Kontrolløren noterte i tillegg: privatperson-variantene har også et tall uten kilde (alderen). Ikke ekte nyheter; skal aldri publiseres.",
+  "saker": {
+    "regn-agder": {
+      "kilder": [
+        {
+          "key": "K1",
+          "itemId": "varsel-03",
+          "publisher": "Meteorologisk institutt",
+          "publishedAt": "2026-10-07T10:14:00Z",
+          "title": "Gult farevarsel – kraftig regn i Agder",
+          "text": "Torsdag ventes 60–90 mm på 24 timer, mest i indre deler av fylket. Overvann kan gi oversvømmelser på veier og i lavtliggende områder."
+        },
+        {
+          "key": "K2",
+          "itemId": "etat-02",
+          "publisher": "Statlig etat (se teksten)",
+          "publishedAt": "2026-10-07T12:24:00Z",
+          "title": "Oransje farevarsel for flom i Agder",
+          "text": "NVE har sendt ut oransje farevarsel for flom i Agder torsdag, og vassdragene Otra og Mandalselva er særlig utsatt. Det er også gult farevarsel for jordskred. Det er ventet mellom 60 og 90 millimeter regn i løpet av et døgn, mest i innlandet."
+        },
+        {
+          "key": "K3",
+          "itemId": "kommune-02",
+          "publisher": "Kommune eller organisasjon (se teksten)",
+          "publishedAt": "2026-10-07T14:23:00Z",
+          "title": "Sandsekker til utdeling ved to brannstasjoner",
+          "text": "Det er ventet store nedbørsmengder torsdag, og NVE har varslet fare for flom i Agder. Innbyggere som trenger å beskytte boligen sin, kan hente sandsekker ved to av kommunens brannstasjoner."
+        },
+        {
+          "key": "K4",
+          "itemId": "byraa-02",
+          "publisher": "Nyhetsbyrå",
+          "publishedAt": "2026-10-07T15:18:00Z",
+          "title": "Oransje flomvarsel i Agder",
+          "text": "NVE varsler flom i Agder, særlig i Otra og Mandalselva. Torsdag kan det komme opptil 90 millimeter regn på et døgn, og det er også sendt ut gult varsel om jordskred."
+        }
+      ],
+      "god": {
+        "tittel": "Flomfare i Agder torsdag – Otra og Mandalselva mest utsatt",
+        "ingress": "Kraftig regn ventes over Agder torsdag, og NVE varsler flomfare på oransje nivå. Mest utsatt er Otra og Mandalselva.",
+        "brodtekst": "Det oransje flomvarselet fra NVE gjelder Agder torsdag. Direktoratet trekker fram vassdragene Otra og Mandalselva som særlig sårbare.\n\nI tillegg gjelder et gult varsel om fare for jordskred i fylket, opplyser NVE. Det samme melder et nyhetsbyrå, som også omtaler flomvarselet.\n\nMeteorologisk institutt har på sin side sendt ut gult farevarsel for kraftig regn. Instituttet regner med 60 til 90 millimeter nedbør i løpet av 24 timer torsdag, og de største mengdene ventes i de indre strøkene av fylket. Også NVE venter mest regn i innlandet.\n\nMeteorologene advarer i tillegg om at overvann kan sette veier og områder som ligger lavt, under vann.\n\nEn kommune har gjort sandsekker tilgjengelige for innbyggerne i forbindelse med varslene. Den som har behov for å sikre huset sitt mot vann, kan hente sekker ved to av brannstasjonene i kommunen, opplyser kommunen.",
+        "kategori": "vær og klima",
+        "sensitive_temaer": [],
+        "personer": [],
+        "kilder_brukt": [
+          "K1",
+          "K2",
+          "K3",
+          "K4"
+        ],
+        "usikkerhet": [
+          "Kilden om utdeling av sandsekker oppgir ikke hvilken kommune det gjelder.",
+          "Kildene oppgir bare ukedagen torsdag, ikke dato."
+        ]
+      },
+      "varianter": [
+        {
+          "feil": "tall_uten_kilde",
+          "beskrivelse": "I siste avsnitt er det oppdiktede antallet 2000 lagt inn. Setningen «En kommune har gjort sandsekker tilgjengelige for innbyggerne i forbindelse med varslene.» er endret til «En kommune har gjort 2000 sandsekker tilgjengelige for innbyggerne i forbindelse med varslene.» Ingen kilde oppgir hvor mange sandsekker som deles ut.",
+          "artikkel": {
+            "tittel": "Flomfare i Agder torsdag – Otra og Mandalselva mest utsatt",
+            "ingress": "Kraftig regn ventes over Agder torsdag, og NVE varsler flomfare på oransje nivå. Mest utsatt er Otra og Mandalselva.",
+            "brodtekst": "Det oransje flomvarselet fra NVE gjelder Agder torsdag. Direktoratet trekker fram vassdragene Otra og Mandalselva som særlig sårbare.\n\nI tillegg gjelder et gult varsel om fare for jordskred i fylket, opplyser NVE. Det samme melder et nyhetsbyrå, som også omtaler flomvarselet.\n\nMeteorologisk institutt har på sin side sendt ut gult farevarsel for kraftig regn. Instituttet regner med 60 til 90 millimeter nedbør i løpet av 24 timer torsdag, og de største mengdene ventes i de indre strøkene av fylket. Også NVE venter mest regn i innlandet.\n\nMeteorologene advarer i tillegg om at overvann kan sette veier og områder som ligger lavt, under vann.\n\nEn kommune har gjort 2000 sandsekker tilgjengelige for innbyggerne i forbindelse med varslene. Den som har behov for å sikre huset sitt mot vann, kan hente sekker ved to av brannstasjonene i kommunen, opplyser kommunen.",
+            "kategori": "vær og klima",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4"
+            ],
+            "usikkerhet": [
+              "Kilden om utdeling av sandsekker oppgir ikke hvilken kommune det gjelder.",
+              "Kildene oppgir bare ukedagen torsdag, ikke dato."
+            ]
+          }
+        },
+        {
+          "feil": "langt_sitat",
+          "beskrivelse": "I siste avsnitt er setningen «Den som har behov for å sikre huset sitt mot vann, kan hente sekker ved to av brannstasjonene i kommunen, opplyser kommunen.» byttet ut med et direkte sitat på 30 ord, ordrett fra K3 (kommunen): «Det er ventet store nedbørsmengder torsdag, og NVE har varslet fare for flom i Agder. Innbyggere som trenger å beskytte boligen sin, kan hente sandsekker ved to av kommunens brannstasjoner», skriver kommunen i en kunngjøring.",
+          "artikkel": {
+            "tittel": "Flomfare i Agder torsdag – Otra og Mandalselva mest utsatt",
+            "ingress": "Kraftig regn ventes over Agder torsdag, og NVE varsler flomfare på oransje nivå. Mest utsatt er Otra og Mandalselva.",
+            "brodtekst": "Det oransje flomvarselet fra NVE gjelder Agder torsdag. Direktoratet trekker fram vassdragene Otra og Mandalselva som særlig sårbare.\n\nI tillegg gjelder et gult varsel om fare for jordskred i fylket, opplyser NVE. Det samme melder et nyhetsbyrå, som også omtaler flomvarselet.\n\nMeteorologisk institutt har på sin side sendt ut gult farevarsel for kraftig regn. Instituttet regner med 60 til 90 millimeter nedbør i løpet av 24 timer torsdag, og de største mengdene ventes i de indre strøkene av fylket. Også NVE venter mest regn i innlandet.\n\nMeteorologene advarer i tillegg om at overvann kan sette veier og områder som ligger lavt, under vann.\n\nEn kommune har gjort sandsekker tilgjengelige for innbyggerne i forbindelse med varslene. «Det er ventet store nedbørsmengder torsdag, og NVE har varslet fare for flom i Agder. Innbyggere som trenger å beskytte boligen sin, kan hente sandsekker ved to av kommunens brannstasjoner», skriver kommunen i en kunngjøring.",
+            "kategori": "vær og klima",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4"
+            ],
+            "usikkerhet": [
+              "Kilden om utdeling av sandsekker oppgir ikke hvilken kommune det gjelder.",
+              "Kildene oppgir bare ukedagen torsdag, ikke dato."
+            ]
+          }
+        },
+        {
+          "feil": "oppdiktet_sitat",
+          "beskrivelse": "I første avsnitt er dette oppdiktede sitatet på 9 ord lagt til etter «...som særlig sårbare.»: «Vi ber folk holde god avstand til elvebreddene torsdag», sier NVE. Sitatet står ikke i noen kilde.",
+          "artikkel": {
+            "tittel": "Flomfare i Agder torsdag – Otra og Mandalselva mest utsatt",
+            "ingress": "Kraftig regn ventes over Agder torsdag, og NVE varsler flomfare på oransje nivå. Mest utsatt er Otra og Mandalselva.",
+            "brodtekst": "Det oransje flomvarselet fra NVE gjelder Agder torsdag. Direktoratet trekker fram vassdragene Otra og Mandalselva som særlig sårbare. «Vi ber folk holde god avstand til elvebreddene torsdag», sier NVE.\n\nI tillegg gjelder et gult varsel om fare for jordskred i fylket, opplyser NVE. Det samme melder et nyhetsbyrå, som også omtaler flomvarselet.\n\nMeteorologisk institutt har på sin side sendt ut gult farevarsel for kraftig regn. Instituttet regner med 60 til 90 millimeter nedbør i løpet av 24 timer torsdag, og de største mengdene ventes i de indre strøkene av fylket. Også NVE venter mest regn i innlandet.\n\nMeteorologene advarer i tillegg om at overvann kan sette veier og områder som ligger lavt, under vann.\n\nEn kommune har gjort sandsekker tilgjengelige for innbyggerne i forbindelse med varslene. Den som har behov for å sikre huset sitt mot vann, kan hente sekker ved to av brannstasjonene i kommunen, opplyser kommunen.",
+            "kategori": "vær og klima",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4"
+            ],
+            "usikkerhet": [
+              "Kilden om utdeling av sandsekker oppgir ikke hvilken kommune det gjelder.",
+              "Kildene oppgir bare ukedagen torsdag, ikke dato."
+            ]
+          }
+        },
+        {
+          "feil": "kopiert_tekst",
+          "beskrivelse": "Første avsnitt («Det oransje flomvarselet fra NVE gjelder Agder torsdag. Direktoratet trekker fram vassdragene Otra og Mandalselva som særlig sårbare.») er byttet ut med denne setningen på 19 ord, kopiert ordrett fra K2 uten anførselstegn: NVE har sendt ut oransje farevarsel for flom i Agder torsdag, og vassdragene Otra og Mandalselva er særlig utsatt.",
+          "artikkel": {
+            "tittel": "Flomfare i Agder torsdag – Otra og Mandalselva mest utsatt",
+            "ingress": "Kraftig regn ventes over Agder torsdag, og NVE varsler flomfare på oransje nivå. Mest utsatt er Otra og Mandalselva.",
+            "brodtekst": "NVE har sendt ut oransje farevarsel for flom i Agder torsdag, og vassdragene Otra og Mandalselva er særlig utsatt.\n\nI tillegg gjelder et gult varsel om fare for jordskred i fylket, opplyser NVE. Det samme melder et nyhetsbyrå, som også omtaler flomvarselet.\n\nMeteorologisk institutt har på sin side sendt ut gult farevarsel for kraftig regn. Instituttet regner med 60 til 90 millimeter nedbør i løpet av 24 timer torsdag, og de største mengdene ventes i de indre strøkene av fylket. Også NVE venter mest regn i innlandet.\n\nMeteorologene advarer i tillegg om at overvann kan sette veier og områder som ligger lavt, under vann.\n\nEn kommune har gjort sandsekker tilgjengelige for innbyggerne i forbindelse med varslene. Den som har behov for å sikre huset sitt mot vann, kan hente sekker ved to av brannstasjonene i kommunen, opplyser kommunen.",
+            "kategori": "vær og klima",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4"
+            ],
+            "usikkerhet": [
+              "Kilden om utdeling av sandsekker oppgir ikke hvilken kommune det gjelder.",
+              "Kildene oppgir bare ukedagen torsdag, ikke dato."
+            ]
+          }
+        },
+        {
+          "feil": "privatperson",
+          "beskrivelse": "Til slutt i siste avsnitt er denne setningen om en oppdiktet privatperson lagt til: Blant dem som har hentet sandsekker, er Arne Tveit (60) fra Mandal, som vil sikre kjelleren sin før regnet kommer. Arne Tveit står også i feltet personer med rolle privatperson. Alderen 60 er valgt fordi tallet allerede står i kildene (60 mm), slik at variantens eneste feil er privatpersonen.",
+          "artikkel": {
+            "tittel": "Flomfare i Agder torsdag – Otra og Mandalselva mest utsatt",
+            "ingress": "Kraftig regn ventes over Agder torsdag, og NVE varsler flomfare på oransje nivå. Mest utsatt er Otra og Mandalselva.",
+            "brodtekst": "Det oransje flomvarselet fra NVE gjelder Agder torsdag. Direktoratet trekker fram vassdragene Otra og Mandalselva som særlig sårbare.\n\nI tillegg gjelder et gult varsel om fare for jordskred i fylket, opplyser NVE. Det samme melder et nyhetsbyrå, som også omtaler flomvarselet.\n\nMeteorologisk institutt har på sin side sendt ut gult farevarsel for kraftig regn. Instituttet regner med 60 til 90 millimeter nedbør i løpet av 24 timer torsdag, og de største mengdene ventes i de indre strøkene av fylket. Også NVE venter mest regn i innlandet.\n\nMeteorologene advarer i tillegg om at overvann kan sette veier og områder som ligger lavt, under vann.\n\nEn kommune har gjort sandsekker tilgjengelige for innbyggerne i forbindelse med varslene. Den som har behov for å sikre huset sitt mot vann, kan hente sekker ved to av brannstasjonene i kommunen, opplyser kommunen. Blant dem som har hentet sandsekker, er Arne Tveit (60) fra Mandal, som vil sikre kjelleren sin før regnet kommer.",
+            "kategori": "vær og klima",
+            "sensitive_temaer": [],
+            "personer": [
+              {
+                "navn": "Arne Tveit",
+                "rolle": "privatperson",
+                "kilder": []
+              }
+            ],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4"
+            ],
+            "usikkerhet": [
+              "Kilden om utdeling av sandsekker oppgir ikke hvilken kommune det gjelder.",
+              "Kildene oppgir bare ukedagen torsdag, ikke dato."
+            ]
+          }
+        }
+      ]
+    },
+    "barnehage-pris": {
+      "kilder": [
+        {
+          "key": "K1",
+          "itemId": "departement-01",
+          "publisher": "Regjeringen",
+          "publishedAt": "2026-10-05T08:32:00Z",
+          "title": "Foreslår å halvere maksprisen i barnehagen",
+          "text": "Regjeringen legger i dag fram et lovforslag som reduserer den høyeste prisen for en barnehageplass til 1500 kroner i måneden. Endringen er foreslått å gjelde fra 1. august 2027.\n\nKunnskapsdepartementet har i dag lagt fram Prop. 14 L (2026–2027) med forslag til endringer i barnehageloven. Forslaget går ut på at maksimalprisen foreldre betaler for en barnehageplass, reduseres fra 3000 kroner til 1500 kroner per måned.\n\nDen nye maksprisen er foreslått å tre i kraft fra 1. august 2027, slik at familiene får lavere regning fra starten av barnehageåret.\n\nKommunene skal ikke bære kostnaden ved lavere foreldrebetaling. Regjeringen legger opp til at kommunene kompenseres gjennom rammetilskuddet. Den årlige kompensasjonen er anslått til om lag 2,1 milliarder kroner.\n\nProposisjonen skal nå behandles i Stortinget."
+        },
+        {
+          "key": "K2",
+          "itemId": "byraa-05",
+          "publisher": "Nyhetsbyrå",
+          "publishedAt": "2026-10-05T08:47:00Z",
+          "title": "Regjeringen vil halvere barnehageprisen",
+          "text": "Maksprisen for en barnehageplass skal ned fra 3000 til 1500 kroner i måneden fra august 2027, foreslår regjeringen. Kommunene skal kompenseres med anslagsvis 2,1 milliarder kroner i året."
+        },
+        {
+          "key": "K3",
+          "itemId": "kommune-05",
+          "publisher": "Kommune eller organisasjon (se teksten)",
+          "publishedAt": "2026-10-05T12:41:00Z",
+          "title": "Halvert barnehagepris: Kompensasjonen må dekke hele inntektstapet",
+          "text": "KS mener kommunene må få full kompensasjon når maksprisen i barnehagen halveres. Rammetilskuddet må øke nok til å dekke hele bortfallet av foreldrebetaling.\n\nRegjeringen la i dag fram forslag om å senke maksimalprisen for en barnehageplass fra 3000 til 1500 kroner i måneden. Endringen skal etter planen gjelde fra 1. august 2027.\n\nIfølge regjeringen skal kommunene kompenseres med om lag 2,1 milliarder kroner i året gjennom rammetilskuddet. KS vil gå grundig gjennom beregningene. Kommunene har ansvaret for barnehagetilbudet og kan ikke bære et inntektstap som ikke er fullt finansiert.\n\nKS forventer at kompensasjonen justeres hvis det faktiske bortfallet av foreldrebetaling blir større enn anslått, og at den følges opp i årene framover. Ellers risikerer kommunene å måtte kutte i andre tjenester. KS vil følge saken videre når forslaget skal behandles i Stortinget."
+        },
+        {
+          "key": "K4",
+          "itemId": "etat-03",
+          "publisher": "Statlig etat (se teksten)",
+          "publishedAt": "2026-10-06T09:15:00Z",
+          "title": "Lavere maksimalpris i barnehage – dette betyr endringen for kommunene",
+          "text": "Regjeringen foreslår å halvere maksimalprisen for en barnehageplass fra august 2027. Her er en oversikt over hva forslaget betyr for kommunene som barnehagemyndighet.\n\nKunnskapsdepartementet har lagt fram en lovproposisjon med forslag om å sette ned maksimalprisen for en heltidsplass i barnehage til 1500 kroner i måneden. I dag er maksimalprisen 3000 kroner. Endringen er foreslått å gjelde fra 1. august 2027.\n\nForslaget skal behandles i Stortinget, og endelig vedtak er ikke fattet. Vi anbefaler likevel at kommunene allerede nå begynner å forberede seg, blant annet ved å gå gjennom egne betalingssatser, vedtekter og rutiner for foreldrebetaling i både kommunale og private barnehager.\n\nKommunene skal kompenseres for redusert foreldrebetaling gjennom rammetilskuddet. Departementet anslår kostnaden til om lag 2,1 milliarder kroner i året.\n\nVi oppdaterer veiledningen når Stortinget har behandlet saken."
+        },
+        {
+          "key": "K5",
+          "itemId": "stortinget-01",
+          "publisher": "Stortinget",
+          "publishedAt": "2026-10-08T11:23:00Z",
+          "title": "Endringer i barnehageloven (redusert maksimalpris for en barnehageplass)",
+          "text": "Korttittel: Endringer i barnehageloven (lavere maksimalpris)\nStatus: Til behandling\nType: Lovsak\nDokumentgruppe: Proposisjon\nKomité: Utdannings- og forskningskomiteen\nEmner: Barnehager, Kommuneøkonomi, Familie og barn\nHenvisning: Prop. 14 L (2026–2027)"
+        }
+      ],
+      "god": {
+        "tittel": "Regjeringen foreslår å kutte barnehageprisen til 1500 kroner i måneden",
+        "ingress": "Foreldre skal betale høyst 1500 kroner i måneden for en barnehageplass fra august 2027, dersom Stortinget slutter seg til regjeringens lovforslag. KS vil at kommunene skal få dekket hele tapet.",
+        "brodtekst": "Kunnskapsdepartementet har lagt fram en proposisjon med endringer i barnehageloven. Der foreslås det at den høyeste prisen foreldre kan måtte betale for en barnehageplass, settes ned fra 3000 til 1500 kroner per måned, opplyser regjeringen.\n\nDen nye prisen er tenkt å gjelde fra 1. august 2027, når et nytt barnehageår begynner.\n\nIfølge regjeringen skal ikke kommunene sitte igjen med regningen for at foreldrene betaler mindre. De skal få kompensasjon gjennom rammetilskuddet, og departementet anslår at dette vil koste rundt 2,1 milliarder kroner årlig.\n\nKS mener kommunene må få dekket hele bortfallet av foreldrebetaling, og vil gå grundig gjennom regjeringens beregninger. Organisasjonen forventer at kompensasjonen blir justert dersom inntektstapet viser seg å bli større enn anslått, og at den blir fulgt opp også i årene framover. Uten det kan kommunene bli nødt til å kutte i andre tjenester, advarer KS.\n\nEn statlig etat som veileder kommunene, anbefaler at de starter forberedelsene allerede nå, selv om Stortinget ennå ikke har vedtatt endringen. Etaten råder kommunene til å se over sine satser, vedtekter og rutiner for hva foreldrene betaler, både i kommunale og private barnehager.\n\nLovforslaget ligger nå til behandling i Stortinget, der utdannings- og forskningskomiteen har fått saken, viser Stortingets oversikt.",
+        "kategori": "utdanning",
+        "sensitive_temaer": [],
+        "personer": [],
+        "kilder_brukt": [
+          "K1",
+          "K3",
+          "K4",
+          "K5"
+        ],
+        "usikkerhet": [
+          "Etaten bak veiledningen til kommunene (K4) er ikke navngitt i kilden og omtales derfor bare som en statlig etat.",
+          "Forslaget er ikke vedtatt; endelig utfall avhenger av Stortingets behandling."
+        ]
+      },
+      "varianter": [
+        {
+          "feil": "tall_uten_kilde",
+          "beskrivelse": "I andre avsnitt er setningen om ikrafttredelse utvidet med et oppdiktet antall barn som ikke står i noen kilde. Innplantet tekst: «for rundt 280 000 barn» (hele setningen: «Den nye prisen er tenkt å gjelde fra 1. august 2027, når et nytt barnehageår begynner for rundt 280 000 barn.»).",
+          "artikkel": {
+            "tittel": "Regjeringen foreslår å kutte barnehageprisen til 1500 kroner i måneden",
+            "ingress": "Foreldre skal betale høyst 1500 kroner i måneden for en barnehageplass fra august 2027, dersom Stortinget slutter seg til regjeringens lovforslag. KS vil at kommunene skal få dekket hele tapet.",
+            "brodtekst": "Kunnskapsdepartementet har lagt fram en proposisjon med endringer i barnehageloven. Der foreslås det at den høyeste prisen foreldre kan måtte betale for en barnehageplass, settes ned fra 3000 til 1500 kroner per måned, opplyser regjeringen.\n\nDen nye prisen er tenkt å gjelde fra 1. august 2027, når et nytt barnehageår begynner for rundt 280 000 barn.\n\nIfølge regjeringen skal ikke kommunene sitte igjen med regningen for at foreldrene betaler mindre. De skal få kompensasjon gjennom rammetilskuddet, og departementet anslår at dette vil koste rundt 2,1 milliarder kroner årlig.\n\nKS mener kommunene må få dekket hele bortfallet av foreldrebetaling, og vil gå grundig gjennom regjeringens beregninger. Organisasjonen forventer at kompensasjonen blir justert dersom inntektstapet viser seg å bli større enn anslått, og at den blir fulgt opp også i årene framover. Uten det kan kommunene bli nødt til å kutte i andre tjenester, advarer KS.\n\nEn statlig etat som veileder kommunene, anbefaler at de starter forberedelsene allerede nå, selv om Stortinget ennå ikke har vedtatt endringen. Etaten råder kommunene til å se over sine satser, vedtekter og rutiner for hva foreldrene betaler, både i kommunale og private barnehager.\n\nLovforslaget ligger nå til behandling i Stortinget, der utdannings- og forskningskomiteen har fått saken, viser Stortingets oversikt.",
+            "kategori": "utdanning",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "Etaten bak veiledningen til kommunene (K4) er ikke navngitt i kilden og omtales derfor bare som en statlig etat.",
+              "Forslaget er ikke vedtatt; endelig utfall avhenger av Stortingets behandling."
+            ]
+          }
+        },
+        {
+          "feil": "langt_sitat",
+          "beskrivelse": "I femte avsnitt er omskrivingen av etatens råd erstattet med et direkte sitat på 30 ord, ordrett fra K4 og tilskrevet etaten. Innplantet tekst: «Vi anbefaler likevel at kommunene allerede nå begynner å forberede seg, blant annet ved å gå gjennom egne betalingssatser, vedtekter og rutiner for foreldrebetaling i både kommunale og private barnehager», skriver etaten.",
+          "artikkel": {
+            "tittel": "Regjeringen foreslår å kutte barnehageprisen til 1500 kroner i måneden",
+            "ingress": "Foreldre skal betale høyst 1500 kroner i måneden for en barnehageplass fra august 2027, dersom Stortinget slutter seg til regjeringens lovforslag. KS vil at kommunene skal få dekket hele tapet.",
+            "brodtekst": "Kunnskapsdepartementet har lagt fram en proposisjon med endringer i barnehageloven. Der foreslås det at den høyeste prisen foreldre kan måtte betale for en barnehageplass, settes ned fra 3000 til 1500 kroner per måned, opplyser regjeringen.\n\nDen nye prisen er tenkt å gjelde fra 1. august 2027, når et nytt barnehageår begynner.\n\nIfølge regjeringen skal ikke kommunene sitte igjen med regningen for at foreldrene betaler mindre. De skal få kompensasjon gjennom rammetilskuddet, og departementet anslår at dette vil koste rundt 2,1 milliarder kroner årlig.\n\nKS mener kommunene må få dekket hele bortfallet av foreldrebetaling, og vil gå grundig gjennom regjeringens beregninger. Organisasjonen forventer at kompensasjonen blir justert dersom inntektstapet viser seg å bli større enn anslått, og at den blir fulgt opp også i årene framover. Uten det kan kommunene bli nødt til å kutte i andre tjenester, advarer KS.\n\nEn statlig etat som veileder kommunene, understreker at Stortinget ennå ikke har vedtatt endringen. «Vi anbefaler likevel at kommunene allerede nå begynner å forberede seg, blant annet ved å gå gjennom egne betalingssatser, vedtekter og rutiner for foreldrebetaling i både kommunale og private barnehager», skriver etaten.\n\nLovforslaget ligger nå til behandling i Stortinget, der utdannings- og forskningskomiteen har fått saken, viser Stortingets oversikt.",
+            "kategori": "utdanning",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "Etaten bak veiledningen til kommunene (K4) er ikke navngitt i kilden og omtales derfor bare som en statlig etat.",
+              "Forslaget er ikke vedtatt; endelig utfall avhenger av Stortingets behandling."
+            ]
+          }
+        },
+        {
+          "feil": "oppdiktet_sitat",
+          "beskrivelse": "På slutten av første avsnitt er det lagt inn et kort direkte sitat på 8 ord som ikke står i noen kilde, tilskrevet Kunnskapsdepartementet. Innplantet tekst: «Dette blir et historisk løft for landets småbarnsfamilier», skriver Kunnskapsdepartementet.",
+          "artikkel": {
+            "tittel": "Regjeringen foreslår å kutte barnehageprisen til 1500 kroner i måneden",
+            "ingress": "Foreldre skal betale høyst 1500 kroner i måneden for en barnehageplass fra august 2027, dersom Stortinget slutter seg til regjeringens lovforslag. KS vil at kommunene skal få dekket hele tapet.",
+            "brodtekst": "Kunnskapsdepartementet har lagt fram en proposisjon med endringer i barnehageloven. Der foreslås det at den høyeste prisen foreldre kan måtte betale for en barnehageplass, settes ned fra 3000 til 1500 kroner per måned, opplyser regjeringen. «Dette blir et historisk løft for landets småbarnsfamilier», skriver Kunnskapsdepartementet.\n\nDen nye prisen er tenkt å gjelde fra 1. august 2027, når et nytt barnehageår begynner.\n\nIfølge regjeringen skal ikke kommunene sitte igjen med regningen for at foreldrene betaler mindre. De skal få kompensasjon gjennom rammetilskuddet, og departementet anslår at dette vil koste rundt 2,1 milliarder kroner årlig.\n\nKS mener kommunene må få dekket hele bortfallet av foreldrebetaling, og vil gå grundig gjennom regjeringens beregninger. Organisasjonen forventer at kompensasjonen blir justert dersom inntektstapet viser seg å bli større enn anslått, og at den blir fulgt opp også i årene framover. Uten det kan kommunene bli nødt til å kutte i andre tjenester, advarer KS.\n\nEn statlig etat som veileder kommunene, anbefaler at de starter forberedelsene allerede nå, selv om Stortinget ennå ikke har vedtatt endringen. Etaten råder kommunene til å se over sine satser, vedtekter og rutiner for hva foreldrene betaler, både i kommunale og private barnehager.\n\nLovforslaget ligger nå til behandling i Stortinget, der utdannings- og forskningskomiteen har fått saken, viser Stortingets oversikt.",
+            "kategori": "utdanning",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "Etaten bak veiledningen til kommunene (K4) er ikke navngitt i kilden og omtales derfor bare som en statlig etat.",
+              "Forslaget er ikke vedtatt; endelig utfall avhenger av Stortingets behandling."
+            ]
+          }
+        },
+        {
+          "feil": "kopiert_tekst",
+          "beskrivelse": "I første avsnitt er den omskrevne andre setningen erstattet med en setning på 20 ord kopiert ordrett fra K1, uten anførselstegn og uten kildehenvisning. Innplantet tekst: Forslaget går ut på at maksimalprisen foreldre betaler for en barnehageplass, reduseres fra 3000 kroner til 1500 kroner per måned.",
+          "artikkel": {
+            "tittel": "Regjeringen foreslår å kutte barnehageprisen til 1500 kroner i måneden",
+            "ingress": "Foreldre skal betale høyst 1500 kroner i måneden for en barnehageplass fra august 2027, dersom Stortinget slutter seg til regjeringens lovforslag. KS vil at kommunene skal få dekket hele tapet.",
+            "brodtekst": "Kunnskapsdepartementet har lagt fram en proposisjon med endringer i barnehageloven. Forslaget går ut på at maksimalprisen foreldre betaler for en barnehageplass, reduseres fra 3000 kroner til 1500 kroner per måned.\n\nDen nye prisen er tenkt å gjelde fra 1. august 2027, når et nytt barnehageår begynner.\n\nIfølge regjeringen skal ikke kommunene sitte igjen med regningen for at foreldrene betaler mindre. De skal få kompensasjon gjennom rammetilskuddet, og departementet anslår at dette vil koste rundt 2,1 milliarder kroner årlig.\n\nKS mener kommunene må få dekket hele bortfallet av foreldrebetaling, og vil gå grundig gjennom regjeringens beregninger. Organisasjonen forventer at kompensasjonen blir justert dersom inntektstapet viser seg å bli større enn anslått, og at den blir fulgt opp også i årene framover. Uten det kan kommunene bli nødt til å kutte i andre tjenester, advarer KS.\n\nEn statlig etat som veileder kommunene, anbefaler at de starter forberedelsene allerede nå, selv om Stortinget ennå ikke har vedtatt endringen. Etaten råder kommunene til å se over sine satser, vedtekter og rutiner for hva foreldrene betaler, både i kommunale og private barnehager.\n\nLovforslaget ligger nå til behandling i Stortinget, der utdannings- og forskningskomiteen har fått saken, viser Stortingets oversikt.",
+            "kategori": "utdanning",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "Etaten bak veiledningen til kommunene (K4) er ikke navngitt i kilden og omtales derfor bare som en statlig etat.",
+              "Forslaget er ikke vedtatt; endelig utfall avhenger av Stortingets behandling."
+            ]
+          }
+        },
+        {
+          "feil": "privatperson",
+          "beskrivelse": "Etter andre avsnitt er det lagt inn et nytt avsnitt som navngir en oppdiktet privatperson med alder og bosted, og personen er ført opp i feltet personer med rolle privatperson. Innplantet tekst: Ingrid Solberg (34) fra Hamar har en datter i barnehage og er blant foreldrene som vil få lavere regning hvis forslaget blir vedtatt.",
+          "artikkel": {
+            "tittel": "Regjeringen foreslår å kutte barnehageprisen til 1500 kroner i måneden",
+            "ingress": "Foreldre skal betale høyst 1500 kroner i måneden for en barnehageplass fra august 2027, dersom Stortinget slutter seg til regjeringens lovforslag. KS vil at kommunene skal få dekket hele tapet.",
+            "brodtekst": "Kunnskapsdepartementet har lagt fram en proposisjon med endringer i barnehageloven. Der foreslås det at den høyeste prisen foreldre kan måtte betale for en barnehageplass, settes ned fra 3000 til 1500 kroner per måned, opplyser regjeringen.\n\nDen nye prisen er tenkt å gjelde fra 1. august 2027, når et nytt barnehageår begynner.\n\nIngrid Solberg (34) fra Hamar har en datter i barnehage og er blant foreldrene som vil få lavere regning hvis forslaget blir vedtatt.\n\nIfølge regjeringen skal ikke kommunene sitte igjen med regningen for at foreldrene betaler mindre. De skal få kompensasjon gjennom rammetilskuddet, og departementet anslår at dette vil koste rundt 2,1 milliarder kroner årlig.\n\nKS mener kommunene må få dekket hele bortfallet av foreldrebetaling, og vil gå grundig gjennom regjeringens beregninger. Organisasjonen forventer at kompensasjonen blir justert dersom inntektstapet viser seg å bli større enn anslått, og at den blir fulgt opp også i årene framover. Uten det kan kommunene bli nødt til å kutte i andre tjenester, advarer KS.\n\nEn statlig etat som veileder kommunene, anbefaler at de starter forberedelsene allerede nå, selv om Stortinget ennå ikke har vedtatt endringen. Etaten råder kommunene til å se over sine satser, vedtekter og rutiner for hva foreldrene betaler, både i kommunale og private barnehager.\n\nLovforslaget ligger nå til behandling i Stortinget, der utdannings- og forskningskomiteen har fått saken, viser Stortingets oversikt.",
+            "kategori": "utdanning",
+            "sensitive_temaer": [],
+            "personer": [
+              {
+                "navn": "Ingrid Solberg",
+                "rolle": "privatperson",
+                "kilder": []
+              }
+            ],
+            "kilder_brukt": [
+              "K1",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "Etaten bak veiledningen til kommunene (K4) er ikke navngitt i kilden og omtales derfor bare som en statlig etat.",
+              "Forslaget er ikke vedtatt; endelig utfall avhenger av Stortingets behandling."
+            ]
+          }
+        }
+      ]
+    },
+    "fugl-rogaland": {
+      "kilder": [
+        {
+          "key": "K1",
+          "itemId": "etat-07",
+          "publisher": "Statlig etat (se teksten)",
+          "publishedAt": "2026-10-05T10:32:00Z",
+          "title": "Fugleinfluensa påvist i fjørfebesetning i Klepp",
+          "text": "Mattilsynet har påvist høypatogen fugleinfluensa av typen H5N1 i en besetning med verpehøner i Klepp kommune i Rogaland. Det er opprettet en beskyttelsessone og en overvåkingssone rundt gården.\n\nOm lag 20 000 verpehøner i den smittede besetningen blir avlivet for å hindre at smitten sprer seg. Mattilsynet leder arbeidet på stedet.\n\nRundt gården er det opprettet en beskyttelsessone på 3 kilometer og en overvåkingssone på 10 kilometer. I sonene gjelder egne regler for flytting av fjørfe, egg og utstyr.\n\nVi tar prøver fra andre fjørfebesetninger i området. Fjørfeholdere som ser tegn på sykdom eller økt dødelighet hos fuglene sine, må straks kontakte Mattilsynet.\n\nFugleinfluensa smitter svært sjelden til mennesker."
+        },
+        {
+          "key": "K2",
+          "itemId": "byraa-08",
+          "publisher": "Nyhetsbyrå",
+          "publishedAt": "2026-10-05T11:21:00Z",
+          "title": "Fugleinfluensa påvist på hønsegård i Klepp",
+          "text": "Høypatogen fugleinfluensa er påvist hos verpehøner i Klepp i Rogaland. Rundt 20 000 høner skal avlives, og Mattilsynet har opprettet soner på 3 og 10 kilometer rundt gården."
+        },
+        {
+          "key": "K3",
+          "itemId": "departement-07",
+          "publisher": "Regjeringen",
+          "publishedAt": "2026-10-05T14:12:00Z",
+          "title": "Følger utbruddet av fugleinfluensa i Rogaland tett",
+          "text": "Det er påvist høypatogen fugleinfluensa i en besetning med verpehøner i Klepp kommune. Mattilsynet har opprettet restriksjonssoner rundt gården, og Landbruks- og matdepartementet følger situasjonen tett."
+        },
+        {
+          "key": "K4",
+          "itemId": "kommune-04",
+          "publisher": "Kommune eller organisasjon (se teksten)",
+          "publishedAt": "2026-10-05T15:52:00Z",
+          "title": "Fugleinfluensa påvist på Klepp – svært lav smitterisiko for mennesker",
+          "text": "Mattilsynet har påvist fugleinfluensa i en besetning med verpehøner i kommunen. Risikoen for at mennesker blir smittet er svært lav. Alle som holder fjørfe i nærheten, må følge rådene fra Mattilsynet om sonene rundt gården."
+        },
+        {
+          "key": "K5",
+          "itemId": "etat-08",
+          "publisher": "Statlig etat (se teksten)",
+          "publishedAt": "2026-10-06T09:45:00Z",
+          "title": "Fugleinfluensa i Klepp: Negative prøver fra nabobesetninger",
+          "text": "Prøvene fra fjørfebesetningene rundt den smittede gården i Klepp viser ikke tegn til fugleinfluensa. Beskyttelsessonen og overvåkingssonen gjelder fortsatt inntil videre."
+        }
+      ],
+      "god": {
+        "tittel": "Fugleinfluensa påvist i hønsebesetning i Klepp",
+        "ingress": "Mattilsynet har funnet høypatogen fugleinfluensa hos verpehøner på en gård i Klepp i Rogaland. Rundt 20 000 høner skal avlives for å hindre smittespredning.",
+        "brodtekst": "Det dreier seg om fugleinfluensa av typen H5N1, og smitten ble oppdaget i en besetning med verpehøner i Klepp kommune, opplyser Mattilsynet. Etaten har ansvaret for arbeidet på gården.\n\nFor å stoppe smittespredningen blir rundt 20 000 høner på gården avlivet, ifølge Mattilsynet.\n\nMattilsynet har lagt en beskyttelsessone på 3 kilometer og en overvåkingssone på 10 kilometer rundt gården. Innenfor sonene er flytting av fjørfe, egg og utstyr underlagt særskilte regler.\n\nEtaten har også tatt prøver fra andre fjørfebesetninger i nærområdet. Dagen etter opplyste myndighetene at det ikke er funnet spor av fugleinfluensa i prøvene fra besetningene rundt den smittede gården. Begge sonene blir likevel stående inntil videre.\n\nFjørfeholdere som oppdager sykdomstegn eller at flere fugler enn normalt dør, blir bedt om å kontakte Mattilsynet umiddelbart.\n\nMattilsynet opplyser at fugleinfluensa svært sjelden smitter til mennesker. Klepp kommune beskriver smitterisikoen for mennesker som svært lav, og ber alle med fjørfe i nærheten om å følge Mattilsynets råd om sonene.\n\nLandbruks- og matdepartementet følger utviklingen tett, opplyser regjeringen.",
+        "kategori": "mat og landbruk",
+        "sensitive_temaer": [],
+        "personer": [],
+        "kilder_brukt": [
+          "K1",
+          "K2",
+          "K3",
+          "K4",
+          "K5"
+        ],
+        "usikkerhet": [
+          "K5 oppgir ikke hvilken etat som står bak prøvesvarene; opplysningen er derfor tilskrevet «myndighetene» og ikke Mattilsynet ved navn.",
+          "K4 navngir ikke avsender, men omtaler Klepp som «kommunen»; avsender er antatt å være Klepp kommune."
+        ]
+      },
+      "varianter": [
+        {
+          "feil": "tall_uten_kilde",
+          "beskrivelse": "I fjerde avsnitt er setningen «Etaten har også tatt prøver fra andre fjørfebesetninger i nærområdet.» endret til «Etaten har også tatt prøver fra 14 andre fjørfebesetninger i nærområdet.» Tallet 14 står ikke i noen kilde.",
+          "artikkel": {
+            "tittel": "Fugleinfluensa påvist i hønsebesetning i Klepp",
+            "ingress": "Mattilsynet har funnet høypatogen fugleinfluensa hos verpehøner på en gård i Klepp i Rogaland. Rundt 20 000 høner skal avlives for å hindre smittespredning.",
+            "brodtekst": "Det dreier seg om fugleinfluensa av typen H5N1, og smitten ble oppdaget i en besetning med verpehøner i Klepp kommune, opplyser Mattilsynet. Etaten har ansvaret for arbeidet på gården.\n\nFor å stoppe smittespredningen blir rundt 20 000 høner på gården avlivet, ifølge Mattilsynet.\n\nMattilsynet har lagt en beskyttelsessone på 3 kilometer og en overvåkingssone på 10 kilometer rundt gården. Innenfor sonene er flytting av fjørfe, egg og utstyr underlagt særskilte regler.\n\nEtaten har også tatt prøver fra 14 andre fjørfebesetninger i nærområdet. Dagen etter opplyste myndighetene at det ikke er funnet spor av fugleinfluensa i prøvene fra besetningene rundt den smittede gården. Begge sonene blir likevel stående inntil videre.\n\nFjørfeholdere som oppdager sykdomstegn eller at flere fugler enn normalt dør, blir bedt om å kontakte Mattilsynet umiddelbart.\n\nMattilsynet opplyser at fugleinfluensa svært sjelden smitter til mennesker. Klepp kommune beskriver smitterisikoen for mennesker som svært lav, og ber alle med fjørfe i nærheten om å følge Mattilsynets råd om sonene.\n\nLandbruks- og matdepartementet følger utviklingen tett, opplyser regjeringen.",
+            "kategori": "mat og landbruk",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "K5 oppgir ikke hvilken etat som står bak prøvesvarene; opplysningen er derfor tilskrevet «myndighetene» og ikke Mattilsynet ved navn.",
+              "K4 navngir ikke avsender, men omtaler Klepp som «kommunen»; avsender er antatt å være Klepp kommune."
+            ]
+          }
+        },
+        {
+          "feil": "langt_sitat",
+          "beskrivelse": "Tredje avsnitt er erstattet med et ordrett sitat på 28 ord fra K1: «Rundt gården er det opprettet en beskyttelsessone på 3 kilometer og en overvåkingssone på 10 kilometer. I sonene gjelder egne regler for flytting av fjørfe, egg og utstyr», skriver Mattilsynet.",
+          "artikkel": {
+            "tittel": "Fugleinfluensa påvist i hønsebesetning i Klepp",
+            "ingress": "Mattilsynet har funnet høypatogen fugleinfluensa hos verpehøner på en gård i Klepp i Rogaland. Rundt 20 000 høner skal avlives for å hindre smittespredning.",
+            "brodtekst": "Det dreier seg om fugleinfluensa av typen H5N1, og smitten ble oppdaget i en besetning med verpehøner i Klepp kommune, opplyser Mattilsynet. Etaten har ansvaret for arbeidet på gården.\n\nFor å stoppe smittespredningen blir rundt 20 000 høner på gården avlivet, ifølge Mattilsynet.\n\n«Rundt gården er det opprettet en beskyttelsessone på 3 kilometer og en overvåkingssone på 10 kilometer. I sonene gjelder egne regler for flytting av fjørfe, egg og utstyr», skriver Mattilsynet.\n\nEtaten har også tatt prøver fra andre fjørfebesetninger i nærområdet. Dagen etter opplyste myndighetene at det ikke er funnet spor av fugleinfluensa i prøvene fra besetningene rundt den smittede gården. Begge sonene blir likevel stående inntil videre.\n\nFjørfeholdere som oppdager sykdomstegn eller at flere fugler enn normalt dør, blir bedt om å kontakte Mattilsynet umiddelbart.\n\nMattilsynet opplyser at fugleinfluensa svært sjelden smitter til mennesker. Klepp kommune beskriver smitterisikoen for mennesker som svært lav, og ber alle med fjørfe i nærheten om å følge Mattilsynets råd om sonene.\n\nLandbruks- og matdepartementet følger utviklingen tett, opplyser regjeringen.",
+            "kategori": "mat og landbruk",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "K5 oppgir ikke hvilken etat som står bak prøvesvarene; opplysningen er derfor tilskrevet «myndighetene» og ikke Mattilsynet ved navn.",
+              "K4 navngir ikke avsender, men omtaler Klepp som «kommunen»; avsender er antatt å være Klepp kommune."
+            ]
+          }
+        },
+        {
+          "feil": "oppdiktet_sitat",
+          "beskrivelse": "På slutten av første avsnitt er dette oppdiktede sitatet på 9 ord lagt inn, tilskrevet Mattilsynet: «Vi har god kontroll på situasjonen i området nå», sier Mattilsynet. Sitatet står ikke i noen kilde.",
+          "artikkel": {
+            "tittel": "Fugleinfluensa påvist i hønsebesetning i Klepp",
+            "ingress": "Mattilsynet har funnet høypatogen fugleinfluensa hos verpehøner på en gård i Klepp i Rogaland. Rundt 20 000 høner skal avlives for å hindre smittespredning.",
+            "brodtekst": "Det dreier seg om fugleinfluensa av typen H5N1, og smitten ble oppdaget i en besetning med verpehøner i Klepp kommune, opplyser Mattilsynet. Etaten har ansvaret for arbeidet på gården. «Vi har god kontroll på situasjonen i området nå», sier Mattilsynet.\n\nFor å stoppe smittespredningen blir rundt 20 000 høner på gården avlivet, ifølge Mattilsynet.\n\nMattilsynet har lagt en beskyttelsessone på 3 kilometer og en overvåkingssone på 10 kilometer rundt gården. Innenfor sonene er flytting av fjørfe, egg og utstyr underlagt særskilte regler.\n\nEtaten har også tatt prøver fra andre fjørfebesetninger i nærområdet. Dagen etter opplyste myndighetene at det ikke er funnet spor av fugleinfluensa i prøvene fra besetningene rundt den smittede gården. Begge sonene blir likevel stående inntil videre.\n\nFjørfeholdere som oppdager sykdomstegn eller at flere fugler enn normalt dør, blir bedt om å kontakte Mattilsynet umiddelbart.\n\nMattilsynet opplyser at fugleinfluensa svært sjelden smitter til mennesker. Klepp kommune beskriver smitterisikoen for mennesker som svært lav, og ber alle med fjørfe i nærheten om å følge Mattilsynets råd om sonene.\n\nLandbruks- og matdepartementet følger utviklingen tett, opplyser regjeringen.",
+            "kategori": "mat og landbruk",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "K5 oppgir ikke hvilken etat som står bak prøvesvarene; opplysningen er derfor tilskrevet «myndighetene» og ikke Mattilsynet ved navn.",
+              "K4 navngir ikke avsender, men omtaler Klepp som «kommunen»; avsender er antatt å være Klepp kommune."
+            ]
+          }
+        },
+        {
+          "feil": "kopiert_tekst",
+          "beskrivelse": "Første setning i brødteksten er erstattet med denne setningen på 18 ord, kopiert ordrett fra K1 uten anførselstegn: Mattilsynet har påvist høypatogen fugleinfluensa av typen H5N1 i en besetning med verpehøner i Klepp kommune i Rogaland.",
+          "artikkel": {
+            "tittel": "Fugleinfluensa påvist i hønsebesetning i Klepp",
+            "ingress": "Mattilsynet har funnet høypatogen fugleinfluensa hos verpehøner på en gård i Klepp i Rogaland. Rundt 20 000 høner skal avlives for å hindre smittespredning.",
+            "brodtekst": "Mattilsynet har påvist høypatogen fugleinfluensa av typen H5N1 i en besetning med verpehøner i Klepp kommune i Rogaland. Etaten har ansvaret for arbeidet på gården.\n\nFor å stoppe smittespredningen blir rundt 20 000 høner på gården avlivet, ifølge Mattilsynet.\n\nMattilsynet har lagt en beskyttelsessone på 3 kilometer og en overvåkingssone på 10 kilometer rundt gården. Innenfor sonene er flytting av fjørfe, egg og utstyr underlagt særskilte regler.\n\nEtaten har også tatt prøver fra andre fjørfebesetninger i nærområdet. Dagen etter opplyste myndighetene at det ikke er funnet spor av fugleinfluensa i prøvene fra besetningene rundt den smittede gården. Begge sonene blir likevel stående inntil videre.\n\nFjørfeholdere som oppdager sykdomstegn eller at flere fugler enn normalt dør, blir bedt om å kontakte Mattilsynet umiddelbart.\n\nMattilsynet opplyser at fugleinfluensa svært sjelden smitter til mennesker. Klepp kommune beskriver smitterisikoen for mennesker som svært lav, og ber alle med fjørfe i nærheten om å følge Mattilsynets råd om sonene.\n\nLandbruks- og matdepartementet følger utviklingen tett, opplyser regjeringen.",
+            "kategori": "mat og landbruk",
+            "sensitive_temaer": [],
+            "personer": [],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "K5 oppgir ikke hvilken etat som står bak prøvesvarene; opplysningen er derfor tilskrevet «myndighetene» og ikke Mattilsynet ved navn.",
+              "K4 navngir ikke avsender, men omtaler Klepp som «kommunen»; avsender er antatt å være Klepp kommune."
+            ]
+          }
+        },
+        {
+          "feil": "privatperson",
+          "beskrivelse": "Etter tredje avsnitt er et nytt avsnitt lagt inn med en oppdiktet privatperson: Blant de berørte er Kari Haugland (54) fra Klepp, som har høner på et småbruk i nærheten av den smittede gården. Personen er også ført opp i feltet personer med rolle privatperson.",
+          "artikkel": {
+            "tittel": "Fugleinfluensa påvist i hønsebesetning i Klepp",
+            "ingress": "Mattilsynet har funnet høypatogen fugleinfluensa hos verpehøner på en gård i Klepp i Rogaland. Rundt 20 000 høner skal avlives for å hindre smittespredning.",
+            "brodtekst": "Det dreier seg om fugleinfluensa av typen H5N1, og smitten ble oppdaget i en besetning med verpehøner i Klepp kommune, opplyser Mattilsynet. Etaten har ansvaret for arbeidet på gården.\n\nFor å stoppe smittespredningen blir rundt 20 000 høner på gården avlivet, ifølge Mattilsynet.\n\nMattilsynet har lagt en beskyttelsessone på 3 kilometer og en overvåkingssone på 10 kilometer rundt gården. Innenfor sonene er flytting av fjørfe, egg og utstyr underlagt særskilte regler.\n\nBlant de berørte er Kari Haugland (54) fra Klepp, som har høner på et småbruk i nærheten av den smittede gården.\n\nEtaten har også tatt prøver fra andre fjørfebesetninger i nærområdet. Dagen etter opplyste myndighetene at det ikke er funnet spor av fugleinfluensa i prøvene fra besetningene rundt den smittede gården. Begge sonene blir likevel stående inntil videre.\n\nFjørfeholdere som oppdager sykdomstegn eller at flere fugler enn normalt dør, blir bedt om å kontakte Mattilsynet umiddelbart.\n\nMattilsynet opplyser at fugleinfluensa svært sjelden smitter til mennesker. Klepp kommune beskriver smitterisikoen for mennesker som svært lav, og ber alle med fjørfe i nærheten om å følge Mattilsynets råd om sonene.\n\nLandbruks- og matdepartementet følger utviklingen tett, opplyser regjeringen.",
+            "kategori": "mat og landbruk",
+            "sensitive_temaer": [],
+            "personer": [
+              {
+                "navn": "Kari Haugland",
+                "rolle": "privatperson",
+                "kilder": []
+              }
+            ],
+            "kilder_brukt": [
+              "K1",
+              "K2",
+              "K3",
+              "K4",
+              "K5"
+            ],
+            "usikkerhet": [
+              "K5 oppgir ikke hvilken etat som står bak prøvesvarene; opplysningen er derfor tilskrevet «myndighetene» og ikke Mattilsynet ved navn.",
+              "K4 navngir ikke avsender, men omtaler Klepp som «kommunen»; avsender er antatt å være Klepp kommune."
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

@@ -9,7 +9,7 @@ type Tx = Prisma.TransactionClient;
 
 /** Meldingene redaktøren kan få. Siden viser teksten ut fra koden, aldri fritekst fra adressen. */
 export const MANUAL_ERROR_MESSAGES = {
-  "har-artikkel": "Saken har en artikkel, så kildene kan ikke flyttes her.",
+  "har-artikkel": "Saken har en publisert artikkel, så kildene kan ikke flyttes her.",
   "alene-i-saken": "Elementet er allerede alene i saken.",
   "samme-sak": "Elementet er allerede i den saken.",
   "ukjent-element": "Fant ikke elementet.",
@@ -37,12 +37,31 @@ export class ManualClusterError extends Error {
 }
 
 /**
- * Saker som har en artikkel, endres ikke her. Kildene til en artikkel skal
- * bare endres gjennom oppdateringsflyten (fase 5), med endringslogg.
+ * Saker med en artikkel som er eller har vært publisert, endres ikke her.
+ * Kildene til en publisert artikkel skal bare endres gjennom
+ * oppdateringsflyten (fase 5), med endringslogg. Et utkast som aldri er
+ * publisert, slettes i stedet når kildene flyttes, og skrives på nytt.
  */
 async function assertNoArticle(tx: Tx | Db, storyId: string): Promise<void> {
-  const article = await tx.article.findUnique({ where: { storyId }, select: { id: true } });
-  if (article) throw new ManualClusterError("har-artikkel");
+  const article = await tx.article.findUnique({ where: { storyId }, select: { status: true, publishedAt: true } });
+  if (article && (article.publishedAt !== null || !UNPUBLISHED_DRAFT.includes(article.status))) {
+    throw new ManualClusterError("har-artikkel");
+  }
+}
+
+const UNPUBLISHED_DRAFT: string[] = ["DRAFT", "PENDING_REVIEW"];
+
+/** Sletter utkast som aldri er publisert, så sakene skrives på nytt med de nye kildene. */
+async function discardDrafts(tx: Tx, storyIds: string[]): Promise<void> {
+  const deleted = await tx.article.deleteMany({
+    where: { storyId: { in: storyIds }, publishedAt: null, status: { in: ["DRAFT", "PENDING_REVIEW"] } },
+  });
+  if (deleted.count > 0) {
+    await tx.story.updateMany({
+      where: { id: { in: storyIds } },
+      data: { generationAttempts: 0, lastGenerationError: null },
+    });
+  }
 }
 
 /**
@@ -147,6 +166,7 @@ export async function detachItem(db: Db, itemId: string, now = new Date()): Prom
       await tx.story.delete({ where: { id: story.id } });
       return null;
     }
+    await discardDrafts(tx, [item.storyId]);
     await refreshStory(tx, item.storyId);
     return slug;
   });
@@ -170,6 +190,7 @@ export async function moveItem(db: Db, itemId: string, targetStoryId: string, no
       data: { ...manualData(now, null), storyId: targetStoryId },
     });
     if (updated.count === 0) return false;
+    await discardDrafts(tx, [item.storyId, targetStoryId]);
     await refreshStory(tx, targetStoryId);
     if (await refreshStory(tx, item.storyId)) {
       await tx.sourceItem.update({ where: { id: item.id }, data: { clusterNearestStoryId: item.storyId } });

@@ -83,7 +83,7 @@ async function StoryList({ searchParams }: { searchParams: PageProps<"/admin/sak
       ) : (
         <ul className="mt-6 space-y-6">
           {stories.map((story) => {
-            const locked = story.article !== null;
+            const { locked } = story;
             return (
               <li key={story.id} className="rounded-lg border border-border p-4">
                 <h2 className="font-semibold">{story.workingTitle}</h2>
@@ -91,6 +91,7 @@ async function StoryList({ searchParams }: { searchParams: PageProps<"/admin/sak
                   {story.items.length} {story.items.length === 1 ? "kilde" : "kilder"} ·{" "}
                   {formatDateTime(story.firstSeenAt)} – {formatDateTime(story.lastSourceAt)} · {story.slug}
                   {story.article && ` · Artikkel: ${label(ARTICLE_STATUS_LABEL, story.article.status)}`}
+                  {story.article && !locked && " (utkastet slettes og skrives på nytt hvis kildene flyttes)"}
                 </p>
                 <ul className="mt-3 space-y-3 text-sm">
                   {story.items.map((item) => {
@@ -98,7 +99,7 @@ async function StoryList({ searchParams }: { searchParams: PageProps<"/admin/sak
                       item.clusterMethod === "NEW" &&
                       item.clusterScore !== null &&
                       item.clusterScore >= borderlineThreshold;
-                    const canMove = !locked && item.nearest !== null && !item.nearest.hasArticle;
+                    const canMove = !locked && item.nearest !== null && !item.nearest.locked;
                     return (
                       <li key={item.id} className="border-t border-border pt-3">
                         <a href={item.url} className="text-accent hover:underline" rel="noopener noreferrer">
