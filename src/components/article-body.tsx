@@ -1,15 +1,20 @@
 import { parseBody } from "@/lib/markdown";
 
-/** Brødteksten i en artikkel: avsnitt, mellomtitler og punktlister. */
-export function ArticleBody({ body }: { body: string }) {
+/**
+ * Brødteksten i en artikkel: avsnitt, mellomtitler og punktlister.
+ * `headingLevel` er nivået for mellomtitlene, så de passer inn under
+ * overskriften der teksten vises (h2 på artikkelsiden, h4 i godkjenningskortet).
+ */
+export function ArticleBody({ body, headingLevel = 2 }: { body: string; headingLevel?: 2 | 3 | 4 }) {
+  const Heading = `h${headingLevel}` as const;
   return (
     <div className="space-y-4 text-lg leading-relaxed">
       {parseBody(body).map((block, i) => {
         if (block.type === "heading") {
           return (
-            <h2 key={i} className="pt-2 font-serif text-xl font-semibold">
+            <Heading key={i} className="pt-2 font-serif text-xl font-semibold">
               {block.text}
-            </h2>
+            </Heading>
           );
         }
         if (block.type === "list") {

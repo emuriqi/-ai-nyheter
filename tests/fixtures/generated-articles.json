@@ -156,6 +156,7 @@
               {
                 "navn": "Arne Tveit",
                 "rolle": "privatperson",
+                "omtale": "påstand_om_personen",
                 "kilder": []
               }
             ],
@@ -336,6 +337,7 @@
               {
                 "navn": "Ingrid Solberg",
                 "rolle": "privatperson",
+                "omtale": "påstand_om_personen",
                 "kilder": []
               }
             ],
@@ -521,6 +523,7 @@
               {
                 "navn": "Kari Haugland",
                 "rolle": "privatperson",
+                "omtale": "påstand_om_personen",
                 "kilder": []
               }
             ],

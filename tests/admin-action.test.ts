@@ -9,10 +9,18 @@ import {
   moveStoryItem,
   regenerateArticleAction,
   rejectArticleAction,
+  retryStoryAction,
   runIngestNow,
   unpublishArticleAction,
 } from "@/app/admin/actions";
-import { approveArticle, regenerateArticle, rejectArticle, ReviewError, unpublishArticle } from "@/lib/generate/review";
+import {
+  approveArticle,
+  regenerateArticle,
+  rejectArticle,
+  retryStory,
+  ReviewError,
+  unpublishArticle,
+} from "@/lib/generate/review";
 import { detachItem, ManualClusterError, markClusteringAborted, moveItem } from "@/lib/cluster/manual";
 import { runPipeline } from "@/lib/ingest/pipeline";
 
@@ -25,6 +33,7 @@ vi.mock("@/lib/generate/review", async (importOriginal) => ({
   approveArticle: vi.fn(async () => undefined),
   rejectArticle: vi.fn(async () => undefined),
   regenerateArticle: vi.fn(async () => undefined),
+  retryStory: vi.fn(async () => undefined),
   unpublishArticle: vi.fn(async () => undefined),
 }));
 vi.mock("next/navigation", async (importOriginal) => ({
@@ -187,7 +196,30 @@ describe("admin: godkjenning av artikler", () => {
     expect(fn).toHaveBeenCalledWith(
       expect.anything(),
       "abc123",
-      ...(fn === approveArticle || fn === regenerateArticle ? [] : ["Begrunnelse"]),
+      ...(fn === approveArticle
+        ? []
+        : fn === regenerateArticle
+          ? [expect.objectContaining({ config: expect.anything() })]
+          : ["Begrunnelse"]),
+    );
+  });
+
+  it("«Prøv igjen» nullstiller en sak der skrivingen feilet", async () => {
+    requestHeaders();
+    await expect(retryStoryAction(form({ storyId: "abc" }))).rejects.toThrow("NEXT_HTTP_ERROR_FALLBACK;404");
+    expect(retryStory).not.toHaveBeenCalled();
+    requestHeaders(`Basic ${Buffer.from(`admin:${TOKEN}`).toString("base64")}`);
+    await expect(retryStoryAction(form({ storyId: "abc123" }))).rejects.toThrow(
+      "REDIRECT /admin/godkjenning?melding=proves-igjen",
+    );
+    expect(retryStory).toHaveBeenCalledWith(
+      expect.anything(),
+      "abc123",
+      expect.objectContaining({ config: expect.anything() }),
+    );
+    vi.mocked(retryStory).mockRejectedValueOnce(new ReviewError("for-gammel"));
+    await expect(retryStoryAction(form({ storyId: "abc123" }))).rejects.toThrow(
+      "REDIRECT /admin/godkjenning?melding=for-gammel",
     );
   });
 

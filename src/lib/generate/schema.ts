@@ -21,6 +21,9 @@ export const CATEGORIES = [
 
 export const PERSON_ROLES = ["offentlig_person", "privatperson"] as const;
 
+/** Om artikkelen bare gjengir hva personen sier i sin rolle, eller sier noe om personen. */
+export const PERSON_MENTIONS = ["uttaler_seg", "påstand_om_personen"] as const;
+
 export const MODERATION_KINDS = [
   "udokumentert_påstand",
   "feil_gjengivelse",
@@ -58,9 +61,10 @@ export function articleJsonSchema(editorial: EditorialConfig) {
           properties: {
             navn: { type: "string" },
             rolle: { type: "string", enum: [...PERSON_ROLES] },
+            omtale: { type: "string", enum: [...PERSON_MENTIONS] },
             kilder: { type: "array", items: { type: "string" } },
           },
-          required: ["navn", "rolle", "kilder"],
+          required: ["navn", "rolle", "omtale", "kilder"],
           additionalProperties: false,
         },
       },
@@ -90,7 +94,12 @@ export function articleParser(editorial: EditorialConfig) {
     kategori: z.enum(CATEGORIES),
     sensitive_temaer: z.array(sensitive),
     personer: z.array(
-      z.object({ navn: z.string().trim().min(1), rolle: z.enum(PERSON_ROLES), kilder: z.array(z.string()) }),
+      z.object({
+        navn: z.string().trim().min(1),
+        rolle: z.enum(PERSON_ROLES),
+        omtale: z.enum(PERSON_MENTIONS),
+        kilder: z.array(z.string()),
+      }),
     ),
     kilder_brukt: z.array(z.string()),
     usikkerhet: z.array(z.string()),

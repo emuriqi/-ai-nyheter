@@ -4,6 +4,7 @@ import { loadPrompt } from "../ai/prompts";
 import { callStructured } from "../ai/structured";
 import { escapeTags } from "../ai/structured";
 import type { EditorialConfig } from "../config/schema";
+import { formatLongDateTime } from "../format";
 import {
   articleJsonSchema,
   articleParser,
@@ -18,14 +19,23 @@ import { formatSources, type PreparedSource } from "./sources";
 /** Tenking teller med i max_tokens, så det er god plass til både tenking og svar. */
 const MAX_TOKENS = 16_000;
 /** Skriving og kontroll tar lenger tid enn klassifisering. */
-const TIMEOUT_MS = 5 * 60_000;
+export const TIMEOUT_MS = 5 * 60_000;
+/**
+ * Ett nytt forsøk i SDK-en ved forbigående feil. Med tidsgrensen over tar ett
+ * kall høyst rundt ti minutter; går det fortsatt galt, prøves saken i neste kjøring.
+ */
+export const MAX_RETRIES = 1;
 
-export type WriteOutcome = { ok: true; article: WrittenArticle } | { ok: false; reason: string };
-export type ModerateOutcome = { ok: true; result: ModerationOutput } | { ok: false; reason: string };
+/**
+ * `stopRun`: feilen gjelder API-et eller nøkkelen, ikke saken. Kjøringen
+ * stopper, og forsøket telles ikke mot saken.
+ */
+export type WriteOutcome = { ok: true; article: WrittenArticle } | { ok: false; reason: string; stopRun: boolean };
+export type ModerateOutcome = { ok: true; result: ModerationOutput } | { ok: false; reason: string; stopRun: boolean };
 
 /** Skriver artikler. Byttes ut med en falsk i testene. */
 export type ArticleWriter = {
-  write(sources: PreparedSource[]): Promise<WriteOutcome>;
+  write(sources: PreparedSource[], now: Date): Promise<WriteOutcome>;
   usage: ClaudeUsage;
   promptVersion: string;
   model: string;
@@ -33,7 +43,7 @@ export type ArticleWriter = {
 
 /** Kontrollerer artikler mot kildene. Byttes ut med en falsk i testene. */
 export type ArticleModerator = {
-  moderate(sources: PreparedSource[], article: WrittenArticle): Promise<ModerateOutcome>;
+  moderate(sources: PreparedSource[], article: WrittenArticle, now: Date): Promise<ModerateOutcome>;
   usage: ClaudeUsage;
   promptVersion: string;
   model: string;
@@ -42,6 +52,7 @@ export type ArticleModerator = {
 function promptVars(editorial: EditorialConfig) {
   return {
     maxQuoteWords: editorial.maxQuoteWords,
+    maxQuotedWordsPerSource: editorial.maxQuotedWordsPerSource,
     minSourcesForPersonClaims: editorial.minSourcesForPersonClaims,
     sensitiveCategories: editorial.sensitiveCategories.join(", "),
     categories: CATEGORIES.join(", "),
@@ -63,29 +74,35 @@ export function createClaudeWriter(client: Anthropic, model: string, editorial: 
     usage,
     model,
     promptVersion: prompt.version,
-    async write(sources) {
-      if (disabled) return { ok: false, reason: disabled };
+    async write(sources, now) {
+      if (disabled) return { ok: false, reason: disabled, stopRun: true };
       const result = await callStructured(
         client,
         {
           model,
           system: prompt.text,
-          user: `${formatSources(sources)}\n\nSkriv artikkelen om saken i kildene over.`,
+          user: `${timeContext(now)}\n\n${formatSources(sources)}\n\nSkriv artikkelen om saken i kildene over.`,
           jsonSchema,
           parser,
           effort: "medium",
           maxTokens: MAX_TOKENS,
           timeoutMs: TIMEOUT_MS,
+          maxRetries: MAX_RETRIES,
         },
         usage,
       );
       if (!result.ok) {
         if (result.fatal) disabled = `Skriving ${result.reason}`;
-        return { ok: false, reason: `Skriving ${result.reason}` };
+        return { ok: false, reason: `Skriving ${result.reason}`, stopRun: result.fatal || result.transient };
       }
       return { ok: true, article: result.data };
     },
   };
+}
+
+/** Når artikkelen skrives, så relative tidsord i kildene kan regnes om. */
+export function timeContext(now: Date): string {
+  return `<tidspunkt>Artikkelen skrives ${formatLongDateTime(now)} (norsk tid).</tidspunkt>`;
 }
 
 /** Artikkelen slik moderatoren ser den. */
@@ -105,25 +122,26 @@ export function createClaudeModerator(client: Anthropic, model: string, editoria
     usage,
     model,
     promptVersion: prompt.version,
-    async moderate(sources, article) {
-      if (disabled) return { ok: false, reason: disabled };
+    async moderate(sources, article, now) {
+      if (disabled) return { ok: false, reason: disabled, stopRun: true };
       const result = await callStructured(
         client,
         {
           model,
           system: prompt.text,
-          user: `${formatSources(sources)}\n\n${formatArticle(article)}\n\nKontroller artikkelen mot kildene.`,
+          user: `${timeContext(now)}\n\n${formatSources(sources)}\n\n${formatArticle(article)}\n\nKontroller artikkelen mot kildene.`,
           jsonSchema,
           parser,
           effort: "medium",
           maxTokens: MAX_TOKENS,
           timeoutMs: TIMEOUT_MS,
+          maxRetries: MAX_RETRIES,
         },
         usage,
       );
       if (!result.ok) {
         if (result.fatal) disabled = `Moderering ${result.reason}`;
-        return { ok: false, reason: `Moderering ${result.reason}` };
+        return { ok: false, reason: `Moderering ${result.reason}`, stopRun: result.fatal || result.transient };
       }
       return { ok: true, result: result.data };
     },

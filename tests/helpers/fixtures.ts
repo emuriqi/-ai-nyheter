@@ -40,6 +40,7 @@ export function validConfig(overrides: Partial<SiteConfigInput> = {}): SiteConfi
       manualApproval: "ALL",
       sensitiveCategories: ["kriminalitet"],
       maxQuoteWords: 20,
+      maxQuotedWordsPerSource: 40,
       minSourcesForPersonClaims: 2,
       maxCopiedWords: 12,
       neverNamePrivatePersons: true,

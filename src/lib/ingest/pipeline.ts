@@ -20,12 +20,14 @@ export type PipelineOptions = {
 
 /**
  * Hele den planlagte jobben: synkroniser kildene fra konfigurasjonen, hent
- * nye elementer, grupper dem i saker, skriv artikler for saker som er klare,
- * og slett kildetekst som har passert sletteperioden. Brukes av `npm run ingest`, cron-ruten og knappen i admin.
+ * nye elementer, slett kildetekst som har passert sletteperioden, grupper
+ * elementene i saker og skriv artikler for saker som er klare. Brukes av
+ * `npm run ingest`, cron-ruten og knappen i admin.
  *
  * Slettingen er et juridisk krav og kjører alltid, også når et tidligere steg
- * feiler. En feil i grupperingen eller skrivingen stopper ikke resten; den
- * meldes i resultatet.
+ * feiler. Den kjører før grupperingen og skrivingen, så utløpt tekst aldri
+ * brukes eller sendes til Claude. En feil i grupperingen eller skrivingen
+ * stopper ikke resten; den meldes i resultatet.
  * En feil i synkroniseringen eller innhentingen kastes videre etter slettingen.
  */
 export async function runPipeline(db: Db, { config, trigger, now, fetchImpl, judge, agents }: PipelineOptions) {
@@ -37,13 +39,11 @@ export async function runPipeline(db: Db, { config, trigger, now, fetchImpl, jud
       jobRunDays: config.retention.jobRunDays,
     });
 
-  let steps: { sync: SyncResult; ingest: IngestResult; cluster: ClusterResult; generate: GenerateResult };
+  let sync: SyncResult;
+  let ingest: IngestResult;
   try {
-    const sync = await syncSourcesFromConfig(db, config.sources);
-    const ingest = await runIngestJob(db, { config, trigger, now, fetchImpl });
-    const cluster = await runClusterSafely(db, { config, trigger, now, judge });
-    const generate = await runGenerateSafely(db, { config, trigger, now, agents });
-    steps = { sync, ingest, cluster, generate };
+    sync = await syncSourcesFromConfig(db, config.sources);
+    ingest = await runIngestJob(db, { config, trigger, now, fetchImpl });
   } catch (error) {
     try {
       await retain();
@@ -53,7 +53,9 @@ export async function runPipeline(db: Db, { config, trigger, now, fetchImpl, jud
     throw error;
   }
   const retention = await retain();
-  return { ...steps, retention };
+  const cluster = await runClusterSafely(db, { config, trigger, now, judge });
+  const generate = await runGenerateSafely(db, { config, trigger, now, agents });
+  return { sync, ingest, cluster, generate, retention };
 }
 
 /** Kjører grupperingen og gjør en feil om til et resultat, så slettingen etterpå likevel kjører. */
@@ -78,5 +80,7 @@ async function runGenerateSafely(db: Db, options: GenerateOptions): Promise<Gene
 
 /** true hvis et steg feilet, så cron-ruten og skriptet kan melde det til overvåkingen. */
 export function pipelineFailed(result: { cluster: ClusterResult; generate: GenerateResult }): boolean {
-  return result.cluster.status === "failed" || result.generate.status === "failed";
+  return (
+    result.cluster.status === "failed" || result.generate.status === "failed" || result.generate.status === "stopped"
+  );
 }

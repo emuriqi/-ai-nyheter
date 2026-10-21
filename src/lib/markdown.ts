@@ -9,20 +9,38 @@ export type Block =
   | { type: "list"; items: string[] };
 
 export function parseBody(body: string): Block[] {
-  return body
-    .replace(/\r\n?/g, "\n")
-    .split(/\n\s*\n/)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map((chunk): Block => {
-      const heading = chunk.match(/^#{1,6}\s+(.+)$/);
-      if (heading && !chunk.includes("\n")) return { type: "heading", text: inline(heading[1]) };
-      const lines = chunk.split("\n").map((line) => line.trim());
-      if (lines.every((line) => /^[-*]\s+/.test(line))) {
-        return { type: "list", items: lines.map((line) => inline(line.replace(/^[-*]\s+/, ""))) };
-      }
-      return { type: "paragraph", text: inline(lines.join(" ")) };
-    });
+  const blocks: Block[] = [];
+  let paragraph: string[] = [];
+  let list: string[] = [];
+  const endParagraph = () => {
+    if (paragraph.length > 0) blocks.push({ type: "paragraph", text: inline(paragraph.join(" ")) });
+    paragraph = [];
+  };
+  const endList = () => {
+    if (list.length > 0) blocks.push({ type: "list", items: list });
+    list = [];
+  };
+
+  // Linje for linje, så en mellomtittel eller en liste rett før eller etter tekst uten tom linje også tolkes.
+  const lines = body.replace(/\r\n?/g, "\n").split("\n");
+  for (const line of lines.map((l) => l.trim())) {
+    const heading = line.match(/^#{1,6}\s+(.+)$/);
+    const item = line.match(/^[-*]\s+(.+)$/);
+    if (!line || heading) {
+      endParagraph();
+      endList();
+      if (heading) blocks.push({ type: "heading", text: inline(heading[1]) });
+    } else if (item) {
+      endParagraph();
+      list.push(inline(item[1]));
+    } else {
+      endList();
+      paragraph.push(line);
+    }
+  }
+  endParagraph();
+  endList();
+  return blocks;
 }
 
 /** Fjerner Markdown-tegn for utheving, siden de ikke vises som utheving. */

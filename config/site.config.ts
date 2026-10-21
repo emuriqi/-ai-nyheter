@@ -42,6 +42,8 @@ export default defineSiteConfig({
       "seksuell legning",
     ],
     maxQuoteWords: 20,
+    // Flere korte sitater fra samme kilde kan til sammen ha høyst 40 ord.
+    maxQuotedWordsPerSource: 40,
     minSourcesForPersonClaims: 2,
     // Like ordrekker på mer enn 12 ord utenfor sitat regnes som kopiert.
     maxCopiedWords: 12,

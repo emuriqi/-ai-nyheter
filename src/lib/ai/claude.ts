@@ -35,7 +35,26 @@ export function describeClaudeError(error: unknown): string {
   return "ukjent feil";
 }
 
-/** Feil der det ikke hjelper å prøve igjen i samme kjøring (feil nøkkel eller manglende tilgang). */
+/**
+ * Feil der det ikke hjelper å prøve igjen i samme kjøring: feil nøkkel,
+ * manglende tilgang eller en modell som ikke finnes.
+ */
 export function isFatalClaudeError(error: unknown): boolean {
-  return error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError;
+  return (
+    error instanceof Anthropic.AuthenticationError ||
+    error instanceof Anthropic.PermissionDeniedError ||
+    error instanceof Anthropic.NotFoundError
+  );
+}
+
+/**
+ * Forbigående feil hos API-et eller i nettverket: for mange kall, overbelastning,
+ * serverfeil og tidsavbrudd. De sier ingenting om selve forespørselen.
+ */
+export function isTransientClaudeError(error: unknown): boolean {
+  return (
+    error instanceof Anthropic.RateLimitError ||
+    error instanceof Anthropic.InternalServerError ||
+    error instanceof Anthropic.APIConnectionError
+  );
 }

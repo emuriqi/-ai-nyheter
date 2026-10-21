@@ -55,7 +55,7 @@ export async function getPublishedArticle(slug: string) {
               reason: true,
               createdAt: true,
               createdBy: true,
-              moderation: { select: { decision: true, decidedBy: true, decidedAt: true } },
+              moderation: { select: { decision: true, decidedBy: true, decidedAt: true, checkedBy: true } },
               sources: {
                 select: {
                   sourceItem: {
@@ -84,7 +84,9 @@ export async function getPublishedArticle(slug: string) {
     .sort((a, b) => (a.publishedAt ?? a.fetchedAt).getTime() - (b.publishedAt ?? b.fetchedAt).getTime());
   // Hvem som godkjente: første versjon som ble godkjent.
   const approval = [...article.revisions].reverse().find((r) => r.moderation?.decision === "APPROVED")?.moderation;
-  return { slug: story.slug, ...article, sources, approval: approval ?? null };
+  // Hvordan versjonen som vises, ble kontrollert: AI når moderatoren kjørte, SYSTEM når bare de automatiske kontrollene gjorde det.
+  const checkedBy = current?.moderation?.checkedBy ?? null;
+  return { slug: story.slug, ...article, sources, approval: approval ?? null, checkedBy };
 }
 
 export type PublishedArticle = NonNullable<Awaited<ReturnType<typeof getPublishedArticle>>>;

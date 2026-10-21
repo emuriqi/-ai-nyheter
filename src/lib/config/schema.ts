@@ -118,26 +118,33 @@ export const siteConfigSchema = z
       jobRunDays: z.number().int().min(1).max(365),
     }),
 
-    editorial: z.object({
-      /** ALL: alt godkjennes manuelt. FLAGGED_ONLY: bare saker moderasjonen flagger. */
-      manualApproval: z.enum(["ALL", "FLAGGED_ONLY"]),
-      /** Temaer som alltid krever manuell godkjenning (Vær Varsom-plakaten). */
-      sensitiveCategories: z.array(z.string().min(1)).min(1),
-      /** Lengste tillatte direkte sitat fra en kilde, målt i ord. */
-      maxQuoteWords: z.number().int().min(0).max(50),
-      /** Antall uavhengige kilder som kreves for påstander om enkeltpersoner. */
-      minSourcesForPersonClaims: z.number().int().min(1),
-      /**
-       * Lengste ordrekke i en artikkel som kan være lik en kilde utenfor et
-       * merket sitat. Lengre like ordrekker regnes som kopiert tekst og hindrer
-       * publisering.
-       */
-      maxCopiedWords: z.number().int().min(6).max(30),
-      /** Privatpersoner navngis aldri. Kan ikke slås av. */
-      neverNamePrivatePersons: z.literal(true),
-      /** Kildenes bilder vises aldri. Kan ikke slås av. */
-      showSourceImages: z.literal(false),
-    }),
+    editorial: z
+      .object({
+        /** ALL: alt godkjennes manuelt. FLAGGED_ONLY: bare saker moderasjonen flagger. */
+        manualApproval: z.enum(["ALL", "FLAGGED_ONLY"]),
+        /** Temaer som alltid krever manuell godkjenning (Vær Varsom-plakaten). */
+        sensitiveCategories: z.array(z.string().min(1)).min(1),
+        /** Lengste tillatte direkte sitat fra en kilde, målt i ord. */
+        maxQuoteWords: z.number().int().min(0).max(50),
+        /** Så mange ord kan til sammen siteres ordrett fra én kilde i én artikkel. */
+        maxQuotedWordsPerSource: z.number().int().min(0).max(200),
+        /** Antall uavhengige kilder som kreves for påstander om enkeltpersoner. */
+        minSourcesForPersonClaims: z.number().int().min(1),
+        /**
+         * Lengste ordrekke i en artikkel som kan være lik en kilde utenfor et
+         * merket sitat. Lengre like ordrekker regnes som kopiert tekst og hindrer
+         * publisering.
+         */
+        maxCopiedWords: z.number().int().min(6).max(30),
+        /** Privatpersoner navngis aldri. Kan ikke slås av. */
+        neverNamePrivatePersons: z.literal(true),
+        /** Kildenes bilder vises aldri. Kan ikke slås av. */
+        showSourceImages: z.literal(false),
+      })
+      .refine((e) => e.maxQuotedWordsPerSource >= e.maxQuoteWords, {
+        message: "maxQuotedWordsPerSource kan ikke være lavere enn maxQuoteWords",
+        path: ["maxQuotedWordsPerSource"],
+      }),
 
     ai: z.object({
       provider: z.literal("Anthropic"),

@@ -1,11 +1,14 @@
+import type { SiteConfig } from "../config/schema";
 import type { Db } from "../db";
 import { type Finding, isBlocking } from "./findings";
+import { whyNotWritten } from "./run";
 
 /** Meldingene redaktøren kan få. Siden viser teksten ut fra koden, aldri fritekst fra adressen. */
 export const REVIEW_MESSAGES = {
   publisert: "Artikkelen er publisert.",
   avvist: "Artikkelen er avvist.",
   "skrives-paa-nytt": "Utkastet er slettet. Saken skrives på nytt ved neste kjøring.",
+  "proves-igjen": "Saken prøves igjen ved neste kjøring.",
   avpublisert: "Artikkelen er avpublisert.",
   "ukjent-artikkel": "Fant ikke artikkelen.",
   "ikke-til-godkjenning": "Artikkelen venter ikke på godkjenning.",
@@ -14,11 +17,30 @@ export const REVIEW_MESSAGES = {
   "ikke-publisert": "Artikkelen er ikke publisert.",
   "har-vaert-publisert": "Artikkelen har vært publisert og kan ikke skrives på nytt her.",
   "endret-underveis": "Artikkelen ble endret i mellomtiden. Se over siden og prøv igjen.",
+  "skriving-av":
+    "Skriving er ikke satt opp (slått av i konfigurasjonen, eller ANTHROPIC_API_KEY mangler), så saken ville ikke blitt skrevet. Ingenting er endret.",
+  "for-gammel":
+    "Saken er eldre enn grensen for nye artikler (maxStoryAgeHours), så den ville ikke blitt skrevet på nytt. Ingenting er endret; avvis artikkelen i stedet.",
+  "for-faa-kilder":
+    "Saken har for få kilder med tekst som kan brukes, så den ville ikke blitt skrevet på nytt. Ingenting er endret.",
+  "ukjent-sak": "Fant ikke saken.",
+  "har-artikkel": "Saken har allerede en artikkel.",
   ugyldig: "Ugyldig forespørsel.",
 } as const;
 
 export type ReviewCode = keyof typeof REVIEW_MESSAGES;
-export type ReviewErrorCode = Exclude<ReviewCode, "publisert" | "avvist" | "skrives-paa-nytt" | "avpublisert">;
+export type ReviewErrorCode = Exclude<
+  ReviewCode,
+  "publisert" | "avvist" | "skrives-paa-nytt" | "proves-igjen" | "avpublisert"
+>;
+
+/** Det som trengs for å sjekke at en sak faktisk blir skrevet på nytt. */
+export type RewriteOptions = {
+  config: SiteConfig;
+  now?: Date;
+  /** Om Claude er satt opp. Utelatt: om ANTHROPIC_API_KEY er satt. */
+  canWrite?: boolean;
+};
 
 export class ReviewError extends Error {
   constructor(readonly code: ReviewErrorCode) {
@@ -127,12 +149,22 @@ export async function rejectArticle(db: Db, articleId: string, note: string, now
 /**
  * Sletter et utkast som aldri er publisert, så saken skrives på nytt ved neste
  * kjøring. Publiserte artikler rettes i stedet med endringslogg (fase 5).
+ * Blir saken ikke skrevet på nytt (for gammel, for få kilder, skriving ikke
+ * satt opp), beholdes utkastet.
  */
-export async function regenerateArticle(db: Db, articleId: string): Promise<void> {
+export async function regenerateArticle(db: Db, articleId: string, options: RewriteOptions): Promise<void> {
   const article = await loadArticle(db, articleId);
   if (article.publishedAt !== null || !["DRAFT", "PENDING_REVIEW"].includes(article.status)) {
     throw new ReviewError("har-vaert-publisert");
   }
+  const notWritten = await whyNotWritten(
+    db,
+    options.config,
+    article.storyId,
+    options.now ?? new Date(),
+    options.canWrite,
+  );
+  if (notWritten) throw new ReviewError(notWritten);
   const done = await db.$transaction(async (tx) => {
     const deleted = await tx.article.deleteMany({
       where: { id: article.id, publishedAt: null, status: { in: ["DRAFT", "PENDING_REVIEW"] } },
@@ -145,6 +177,24 @@ export async function regenerateArticle(db: Db, articleId: string): Promise<void
     return true;
   });
   if (!done) throw new ReviewError("endret-underveis");
+}
+
+/**
+ * Nullstiller forsøkene for en sak der skrivingen har feilet, så den prøves
+ * igjen ved neste kjøring. Brukes når feilen er rettet, for eksempel en
+ * ugyldig nøkkel.
+ */
+export async function retryStory(db: Db, storyId: string, options: RewriteOptions): Promise<void> {
+  const story = await db.story.findUnique({ where: { id: storyId }, select: { article: { select: { id: true } } } });
+  if (!story) throw new ReviewError("ukjent-sak");
+  if (story.article) throw new ReviewError("har-artikkel");
+  const notWritten = await whyNotWritten(db, options.config, storyId, options.now ?? new Date(), options.canWrite);
+  if (notWritten) throw new ReviewError(notWritten);
+  const updated = await db.story.updateMany({
+    where: { id: storyId, article: null },
+    data: { generationAttempts: 0, lastGenerationError: null },
+  });
+  if (updated.count === 0) throw new ReviewError("har-artikkel");
 }
 
 /**

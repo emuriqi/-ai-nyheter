@@ -1,7 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { formatDateTime } from "@/lib/format";
 import { getPublishedArticles } from "@/lib/stories";
+
+// Forsiden viser titler og ingresser skrevet av kunstig intelligens (AI-forordningen art. 50).
+export const metadata: Metadata = { other: { "ai-generated": "true" } };
 
 export default function HomePage() {
   return (

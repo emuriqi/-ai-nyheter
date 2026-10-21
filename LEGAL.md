@@ -17,7 +17,7 @@ Dokumentet utvides i hver fase. Det er ikke juridisk rådgivning.
 | Kildenes bilder vises aldri (`showSourceImages: false` kan ikke endres)                    | `schema.ts`                  | ✅     |
 | Kildetekst slettes etter `retention.sourceTextDays` (30 dager). Tittel og URL beholdes for kildelisten | `retention.ts`   | ✅     |
 | En kortere sletteperiode gjelder også tekst som allerede er lagret                         | `retention.ts`               | ✅     |
-| Slettingen kjører i hver planlagte jobb, også når innhentingen eller grupperingen feiler   | `ingest/pipeline.ts`         | ✅     |
+| Slettingen kjører i hver planlagte jobb før grupperingen og skrivingen, også når innhentingen feiler. Skrivingen sender heller ikke tekst som har passert slettefristen, selv om slettingen ikke har kjørt ennå | `ingest/pipeline.ts`, `generate/run.ts` | ✅ |
 | robots.txt (RFC 9309) sjekkes før hver henting, også for mål for omdirigeringer. Kan den ikke leses (5xx, 429, nettverksfeil), hentes ingenting | `ingest/access.ts` | ✅ |
 | TDM-reservasjoner sjekkes før hver henting: tdmrep.json, `tdm-reservation`-header og -meta, og sperre for KI-crawlere i robots.txt. tdmrep.json hentes bare når robots.txt tillater det | `ingest/access.ts` | ✅ |
 | Reserverer kilden enkeltartikler, lagres bare tittel og lenke for dem, ikke tekst. Kommer reservasjonen senere, fjernes teksten ved neste henting | `ingest/run.ts` | ✅ |
@@ -26,8 +26,8 @@ Dokumentet utvides i hver fase. Det er ikke juridisk rådgivning.
 | Høflig henting: User-Agent med kontaktadresse, betingede forespørsler, minste intervall og størrelsesgrense | `ingest/http.ts` | ✅ |
 | Grupperingen analyserer bare tekst som kan analyseres: elementet og kilden er ikke reservert mot tekst- og datautvinning (også reservasjoner funnet etter at elementet ble hentet), kilden er aktiv, og teksten er ikke slettet. Det gjelder nye elementer, elementer i åpne saker som kan sendes til Claude, og ordvektene. Annen tekst analyseres ikke, heller ikke lokalt | `cluster/eligibility.ts` | ✅ |
 | Grupperingen sender bare tittel og et kort utdrag (maks 600 tegn) til Claude, og bare for elementer i gråsonen | `cluster/judge.ts` | ✅ |
-| Korte, merkede og krediterte sitater (`maxQuoteWords`), ellers egne formuleringer. Sitater som er for lange eller ikke står ordrett i kilden, og ordrekker på mer enn `maxCopiedWords` ord som er like en kilde, stopper publisering | `generate/checks.ts`, prompten | ✅ |
-| Artikler bygger bare på kildene, og alle kildene lenkes med kildeangivelse fra lisensen (`attribution`). Kildetekst vises aldri for lesere | `/sak/[slug]` | ✅ |
+| Korte, merkede og krediterte sitater (`maxQuoteWords`, til sammen høyst `maxQuotedWordsPerSource` ord fra samme kilde), ellers egne formuleringer. Sitater som er for lange eller ikke står ordrett i kilden (fra fire ord), og ordrekker på mer enn `maxCopiedWords` ord som er like en kilde, stopper publisering. Alle vanlige sitattegn og sitatstrek kontrolleres. Nær-kopier med små endringer, mye sitering fra samme kilde, kopierte navnelister og titler, og sitater som kan være oversatt fra en kilde på et annet språk, flagges for redaktøren | `generate/checks.ts`, `generate/quotes.ts`, promptene | ✅ |
+| Artikler bygger bare på kildene, og alle kildene Claude fikk se, lenkes med kildeangivelse fra lisensen (`attribution`). Kildetekst vises aldri for lesere | `generate/run.ts`, `/sak/[slug]` | ✅ |
 | Til Claude sendes bare tekst som kan analyseres (samme filter som grupperingen), og bare så mye som trengs (`maxSourceCharsPerItem`, `maxSourceCharsTotal`) | `generate/sources.ts` | ✅ |
 | Side der rettighetshavere kan be om fjerning                                               | Kontakt / fjerning           | Fase 7 |
 
@@ -48,8 +48,11 @@ artikkelsidene (`allowFullTextFetch`) kan regnes som skraping, og er derfor slå
   artikler uansett.
 - Hver artikkel har synlig merking øverst (`ai.articleLabel`) og en forklaring av hvordan den ble laget (modell,
   kontroller, godkjenning). Merkingen vises for alle artikler og styres ikke av noe felt.
-- Maskinlesbar merking: `<meta name="ai-generated" content="true">` og strukturerte data (schema.org
+- Maskinlesbar merking: `<meta name="ai-generated" content="true">` i `<head>` på artikkelsiden og forsiden
+  (metadata strømmes ikke til `<body>`, se `htmlLimitedBots` i `next.config.ts`), og strukturerte data (schema.org
   `NewsArticle` med `creator` som programvare og kildene i `isBasedOn`).
+- Forklaringen av hvordan saken ble laget, sier bare at AI-modereringen kontrollerte teksten når den faktisk gjorde
+  det.
 - Modell og promptversjon lagres for hver artikkel og hver versjon.
 - Merking per svar i chatten kommer i fase 6.
 - Grupperingen (fase 3) lager ikke innhold for lesere. Der Claude har avgjort en gruppering, er det merket i admin
@@ -70,11 +73,18 @@ artikkelsidene (`allowFullTextFetch`) kan regnes som skraping, og er derfor slå
 - Saker om temaene i `editorial.sensitiveCategories` krever manuell godkjenning. Privatpersoner navngis aldri
   (`neverNamePrivatePersons: true` kan ikke endres). Påstander om enkeltpersoner krever minst
   `minSourcesForPersonClaims` uavhengige kilder. Håndheves slik: en navngitt privatperson stopper publisering
-  (fanges av skriverens egen liste og av modereringen), sensitive temaer flagger alltid artikkelen for manuell
-  godkjenning, og personer med færre kilder flagges for redaktøren.
+  (fanges av skriverens egen liste når navnet står i teksten, og av modereringen når den er sikker; usikre funn
+  flagges for redaktøren). Navn som ikke står i skriverens personliste, flagges. Sensitive temaer flagger alltid
+  artikkelen for manuell godkjenning, også når bare modereringen melder dem. Påstander om en person med færre enn
+  `minSourcesForPersonClaims` kilder som nevner personen, med ulike utgivere, flagges for redaktøren. Hva en person
+  sier i sin offentlige rolle, regnes ikke som en påstand om personen. Skriveren og modereringen bruker samme
+  definisjon av offentlig rolle.
 - Alle artikler godkjennes av redaktøren før publisering (`manualApproval: "ALL"`). Artikler som bryter faste regler,
-  kan ikke godkjennes. Publiserte artikler avpubliseres med begrunnelse, som føres i endringsloggen. Admin varsler
-  så lenge ansvarlig redaktør ikke er utpekt.
+  kan ikke godkjennes. Skriverens merknader om hull eller motstrid i kildene flagger artikkelen. Alle publiserte
+  artikler kan avpubliseres fra admin med begrunnelse, som føres i endringsloggen. Admin varsler så lenge ansvarlig
+  redaktør ikke er utpekt.
+- Relative tidsord i kildene («i dag», «i går») regnes om til ukedag eller dato ut fra kildens publiseringstid, så
+  artikkelen ikke blir feil når den publiseres senere. Modereringen ser etter feil tidsangivelser.
 - Hver artikkel kontrolleres to ganger mot kildene: automatisk (sitater, kopiert tekst, tall, kilder, personer) og av
   en egen AI-moderering. Alle funn lagres og vises for redaktøren.
 

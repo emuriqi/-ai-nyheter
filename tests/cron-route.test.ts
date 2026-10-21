@@ -87,4 +87,42 @@ describe("POST /api/cron/ingest", () => {
     expect(body.ok).toBe(false);
     expect(body.summary).toContain("Gruppering feilet: disken er full. Elementene grupperes i neste kjøring.");
   });
+
+  it.each([
+    [{ status: "failed", reason: "databasen er låst" }],
+    [
+      {
+        status: "stopped",
+        jobId: "job",
+        reason: "Skriving feilet: AuthenticationError (401)",
+        stats: {
+          considered: 1,
+          pendingReview: 0,
+          published: 0,
+          flagged: 0,
+          blocked: 0,
+          failed: 0,
+          gaveUp: 0,
+          changed: 0,
+          skipped: 0,
+          stopped: "Skriving feilet: AuthenticationError (401)",
+          writer: null,
+          moderator: null,
+          promptVersion: null,
+        },
+      },
+    ],
+  ])("svarer 500 når skrivingen feilet eller ble stoppet av Claude API (%o)", async (generate) => {
+    vi.stubEnv("CRON_SECRET", SECRET);
+    vi.mocked(runPipeline).mockResolvedValueOnce({
+      sync: { created: 0, updated: 5, paused: 0 },
+      ingest: { status: "done", jobId: "job", sources: [] },
+      cluster: { status: "skipped", reason: "En gruppering kjører allerede" },
+      generate,
+      retention: { purgedSourceItems: 0, deletedJobRuns: 0 },
+    } as Awaited<ReturnType<typeof runPipeline>>);
+    const response = await POST(request(`Bearer ${SECRET}`));
+    expect(response.status).toBe(500);
+    expect((await response.json()).ok).toBe(false);
+  });
 });

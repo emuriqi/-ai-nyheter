@@ -4,6 +4,7 @@ import type { SiteConfig } from "@/lib/config/schema";
 import type { Db } from "@/lib/db";
 import type { ArticleWriter, ModerateOutcome, WriteOutcome } from "@/lib/generate/claude";
 import { findCandidates, type GenerateAgents, resolveAgents, runGenerateJob } from "@/lib/generate/run";
+import { pipelineFailed } from "@/lib/ingest/pipeline";
 import { describeGenerate } from "@/lib/generate/summary";
 import type { WrittenArticle } from "@/lib/generate/schema";
 import { loadCorpus } from "../helpers/cluster-corpus";
@@ -70,6 +71,24 @@ describe("runGenerateJob", () => {
 
   afterEach(() => cleanup());
 
+  /** En sak til, med elementene fra en annen hendelse i korpuset. Returnerer id-en. */
+  async function addStory(event: string): Promise<string> {
+    const ids = await sourceIds(db, config());
+    const story = await db.story.create({
+      data: {
+        slug: event,
+        workingTitle: event,
+        firstSeenAt: new Date("2026-10-07T00:00:00Z"),
+        lastSourceAt: new Date("2026-10-07T01:00:00Z"),
+      },
+    });
+    for (const item of corpus.filter((i) => i.event === event)) {
+      const created = await insertCorpusItem(db, ids, item);
+      await db.sourceItem.update({ where: { id: created.id }, data: { storyId: story.id } });
+    }
+    return story.id;
+  }
+
   const run = (cfg: SiteConfig, a: GenerateAgents | null) =>
     runGenerateJob(db, { config: cfg, trigger: "test", now: NOW, agents: a });
 
@@ -103,14 +122,14 @@ describe("runGenerateJob", () => {
     expect(revision.reason).toBe("Ny sak fra 4 kilder");
     expect(revision.sources).toHaveLength(4);
     expect(revision.moderation).toMatchObject({
-      verdict: "OK",
+      verdict: "FLAGGED",
       decision: "PENDING",
       checkedBy: "AI",
       model: "claude-test",
     });
-    // Skriverens merknader om usikkerhet følger med til redaktøren.
+    // Skriverens merknader om usikkerhet følger med til redaktøren og flagger artikkelen.
     expect(revision.moderation!.reasons).toEqual(
-      regn.good.usikkerhet.map((message) => ({ origin: "skriver", kind: "usikkerhet", severity: "info", message })),
+      regn.good.usikkerhet.map((message) => ({ origin: "skriver", kind: "usikkerhet", severity: "middels", message })),
     );
     expect(article.story).toMatchObject({ category: "vær og klima", sensitivity: "NORMAL", lastGenerationError: null });
 
@@ -118,11 +137,12 @@ describe("runGenerateJob", () => {
       considered: 1,
       pendingReview: 1,
       published: 0,
-      flagged: 0,
+      flagged: 1,
       blocked: 0,
       failed: 0,
+      stopped: null,
     });
-    expect(describeGenerate(result)).toBe("Skriving: 1 ny artikkel, 1 venter på godkjenning.");
+    expect(describeGenerate(result)).toBe("Skriving: 1 ny artikkel, 1 venter på godkjenning, 1 flagget.");
     const job = await db.jobRun.findUniqueOrThrow({ where: { id: result.jobId } });
     expect(job).toMatchObject({ type: "GENERATE", status: "SUCCEEDED" });
 
@@ -177,7 +197,11 @@ describe("runGenerateJob", () => {
   it("flagger og merker kontrollen som automatisk når modereringen feiler", async () => {
     await run(
       config(),
-      agents(writes(regn.good), async () => ({ ok: false, reason: "Moderering feilet: APIError (500)" })),
+      agents(writes(regn.good), async () => ({
+        ok: false,
+        reason: "Moderering uten svar: svaret kunne ikke tolkes",
+        stopRun: false,
+      })),
     );
     expect(await db.moderationReview.findFirstOrThrow()).toMatchObject({
       verdict: "FLAGGED",
@@ -187,9 +211,22 @@ describe("runGenerateJob", () => {
   });
 
   it("teller mislykkede forsøk og gir opp etter grensen", async () => {
-    const failing = agents(async () => ({ ok: false, reason: "Skriving uten svar: stop_reason refusal" }));
-    for (let i = 0; i < 4; i++) await run(config({ maxAttemptsPerStory: 3 }), failing);
+    const failing = agents(async () => ({
+      ok: false,
+      reason: "Skriving uten svar: stop_reason refusal",
+      stopRun: false,
+    }));
+    const results = [];
+    for (let i = 0; i < 4; i++) results.push(await run(config({ maxAttemptsPerStory: 3 }), failing));
     expect(failing.writer.write).toHaveBeenCalledTimes(3);
+    expect(results.map((r) => r.status === "done" && [r.stats.failed, r.stats.gaveUp])).toEqual([
+      [1, 0],
+      [1, 0],
+      [1, 1],
+      [0, 0],
+    ]);
+    expect(describeGenerate(results[2])).toContain("1 gitt opp etter for mange forsøk");
+    expect(describeGenerate(results[0])).toContain("1 feilet og prøves igjen");
     expect(await db.story.findUniqueOrThrow({ where: { id: storyId } })).toMatchObject({
       generationAttempts: 3,
       lastGenerationError: "Skriving uten svar: stop_reason refusal",
@@ -211,6 +248,149 @@ describe("runGenerateJob", () => {
     expect(await db.article.findFirstOrThrow()).toMatchObject({ title: "Annen" });
   });
 
+  it("stopper kjøringen uten å telle forsøk når API-et eller nøkkelen feiler", async () => {
+    await addStory("fugl-rogaland");
+    const failing = agents(async () => ({
+      ok: false,
+      reason: "Skriving feilet: AuthenticationError (401)",
+      stopRun: true,
+    }));
+    const result = await run(config(), failing);
+    expect(result.status).toBe("stopped");
+    if (result.status !== "stopped") throw new Error("forventet stopp");
+    expect(result.reason).toBe("Skriving feilet: AuthenticationError (401)");
+    // Bare den første saken ble forsøkt, og ingen sak har brukt opp et forsøk.
+    expect(failing.writer.write).toHaveBeenCalledTimes(1);
+    expect(await db.story.count({ where: { generationAttempts: { gt: 0 } } })).toBe(0);
+    expect(await db.jobRun.findUniqueOrThrow({ where: { id: result.jobId } })).toMatchObject({
+      status: "FAILED",
+      error: "Skriving feilet: AuthenticationError (401)",
+    });
+    expect(describeGenerate(result)).toContain("Skriving stoppet av en feil hos Claude API");
+    // Cron-ruten og skriptet melder feilen.
+    expect(pipelineFailed({ cluster: { status: "skipped", reason: "" }, generate: result })).toBe(true);
+  });
+
+  it("lagrer ingenting når modereringen stopper av en feil hos API-et", async () => {
+    const result = await run(
+      config(),
+      agents(writes(regn.good), async () => ({
+        ok: false,
+        reason: "Moderering feilet: InternalServerError (529)",
+        stopRun: true,
+      })),
+    );
+    expect(result.status).toBe("stopped");
+    expect(await db.article.count()).toBe(0);
+    expect(await db.story.findUniqueOrThrow({ where: { id: storyId } })).toMatchObject({ generationAttempts: 0 });
+  });
+
+  it("starter ikke på flere saker etter tidsfristen", async () => {
+    await addStory("fugl-rogaland");
+    const a = agents(writes(regn.good));
+    const result = await runGenerateJob(db, { config: config(), trigger: "test", now: NOW, agents: a, budgetMs: 0 });
+    expect(result.status).toBe("done");
+    expect(result.status === "done" && result.stats).toMatchObject({
+      considered: 1,
+      stopped: "tidsfristen for kjøringen er nådd",
+    });
+    expect(a.writer.write).toHaveBeenCalledTimes(1);
+  });
+
+  it("lagrer ikke artikkelen hvis kildene ble flyttet mens den ble skrevet", async () => {
+    const other = await addStory("fugl-rogaland");
+    const result = await run(
+      config(),
+      agents(async (sources) => {
+        // Redaktøren flytter et element fra saken til en annen sak mens Claude skriver.
+        await db.sourceItem.update({ where: { id: sources[0].itemId }, data: { storyId: other } });
+        return { ok: true, article: regn.good };
+      }),
+    );
+    expect(result.status === "done" && result.stats).toMatchObject({ changed: 1, pendingReview: 1 });
+    // Den andre saken ble skrevet med den flyttede kilden; den første lagres ikke og skrives i neste kjøring.
+    expect(await db.article.count({ where: { storyId } })).toBe(0);
+    expect(await db.story.findUniqueOrThrow({ where: { id: storyId } })).toMatchObject({ generationAttempts: 0 });
+  });
+
+  it("kaster ikke når saken er slettet mens den ble skrevet", async () => {
+    const written = await run(
+      config(),
+      agents(async () => {
+        await db.sourceItem.updateMany({ where: { storyId }, data: { storyId: null } });
+        await db.story.delete({ where: { id: storyId } });
+        return { ok: true, article: regn.good };
+      }),
+    );
+    expect(written.status === "done" && written.stats).toMatchObject({ changed: 1 });
+  });
+
+  it("kaster ikke når saken er slettet før en mislykket skriving lagres", async () => {
+    const failed = await run(
+      config(),
+      agents(async () => {
+        await db.sourceItem.updateMany({ where: { storyId }, data: { storyId: null } });
+        await db.story.delete({ where: { id: storyId } });
+        return { ok: false, reason: "Skriving uten svar: stop_reason refusal", stopRun: false };
+      }),
+    );
+    expect(failed.status === "done" && failed.stats).toMatchObject({ failed: 1 });
+  });
+
+  it("lagrer alle kildene Claude fikk se, og fjerner kildehenvisninger fra teksten", async () => {
+    await run(config(), agents(writes({ ...regn.good, kilder_brukt: ["K1"], ingress: `${regn.good.ingress} [K1]` })));
+    const article = await db.article.findUniqueOrThrow({
+      where: { storyId },
+      include: { revisions: { include: { sources: true, moderation: true } } },
+    });
+    expect(article.revisions[0].sources).toHaveLength(4);
+    expect(article.lede).toBe(regn.good.ingress);
+    const reasons = article.revisions[0].moderation!.reasons as { kind: string }[];
+    expect(reasons.map((r) => r.kind)).toContain("kildehenvisning_i_teksten");
+  });
+
+  it("markerer saken som sensitiv når bare moderatoren melder et sensitivt tema", async () => {
+    await run(
+      config(),
+      agents(writes(regn.good), async () => ({
+        ok: true,
+        result: {
+          vurdering: "ok",
+          funn: [{ type: "sensitivt_tema", alvor: "lav", utdrag: "døde", forklaring: "Saken omtaler et dødsfall." }],
+          sensitive_temaer: [],
+        },
+      })),
+    );
+    expect(await db.story.findUniqueOrThrow({ where: { id: storyId } })).toMatchObject({
+      sensitivity: "SENSITIVE",
+      sensitivityReasons: ["sensitivt tema"],
+    });
+  });
+
+  it("skriver ikke mens en annen skriving kjører", async () => {
+    await db.jobRun.create({
+      data: { type: "GENERATE", trigger: "cron", startedAt: new Date(NOW.getTime() - 60_000) },
+    });
+    const a = agents(writes(regn.good));
+    expect(await run(config(), a)).toEqual({ status: "skipped", reason: "En skriving kjører allerede" });
+    expect(a.writer.write).not.toHaveBeenCalled();
+  });
+
+  it("kjører bare én skriving om gangen i samme prosess", async () => {
+    let release: () => void = () => {};
+    const slow = agents(async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return { ok: true, article: regn.good };
+    });
+    const first = run(config(), slow);
+    await vi.waitFor(() => expect(slow.writer.write).toHaveBeenCalled());
+    const second = agents(writes(regn.good));
+    expect(await run(config(), second)).toEqual({ status: "skipped", reason: "En skriving kjører allerede" });
+    release();
+    expect((await first).status).toBe("done");
+    expect(second.writer.write).not.toHaveBeenCalled();
+  });
+
   describe("hvilke saker som er klare", () => {
     it.each([
       ["saken har fått en kilde nylig", { settleMinutes: 30 }, new Date("2026-10-07T15:30:00Z"), 0],
@@ -220,6 +400,22 @@ describe("runGenerateJob", () => {
       ["saken er klar", {}, NOW, 1],
     ])("%s", async (_name, overrides, now, expected) => {
       expect(await findCandidates(db, config(overrides), now)).toHaveLength(expected);
+    });
+
+    it("venter også når en gammel kilde nettopp er lagt i saken", async () => {
+      // Kilden er publisert lenge før, men hentet og gruppert for ti minutter siden.
+      await db.sourceItem.updateMany({
+        where: { storyId, guid: "byraa-02" },
+        data: { clusteredAt: new Date(NOW.getTime() - 10 * 60_000) },
+      });
+      expect(await findCandidates(db, config({ settleMinutes: 30 }), NOW)).toHaveLength(0);
+      expect(await findCandidates(db, config({ settleMinutes: 5 }), NOW)).toHaveLength(1);
+    });
+
+    it("sender ikke tekst som har passert sletteperioden", async () => {
+      await db.sourceItem.updateMany({ where: { storyId, guid: "byraa-02" }, data: { deleteAfter: NOW } });
+      const [candidate] = await findCandidates(db, config(), NOW);
+      expect(candidate.items).toHaveLength(3);
     });
 
     it("sender bare tekst som kan analyseres til Claude", async () => {

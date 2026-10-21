@@ -183,15 +183,26 @@ const reviewArticleSelect = {
   },
 };
 
+/** Så mange avviste og publiserte artikler vises per side. */
+export const REVIEW_PAGE_SIZE = 20;
+
+/** Sidetallet fra adressen: et helt tall fra 1, ellers 1. */
+export function pageNumber(value: unknown): number {
+  const n = typeof value === "string" && /^\d{1,4}$/.test(value) ? Number(value) : 1;
+  return Math.max(1, n);
+}
+
 /**
  * Artiklene til godkjenningssiden: de som venter, de som er avvist, og de
- * som er publisert (for avpublisering). Kildeteksten sendes ikke til siden.
+ * som er publisert (for avpublisering). Avviste og publiserte vises side for
+ * side, så alle kan nås. Kildeteksten sendes ikke til siden.
  */
-export async function getReviewQueue() {
+export async function getReviewQueue({ rejectedPage = 1, publishedPage = 1 } = {}) {
   await requireAdmin();
   await connection();
   const db = getDb();
-  const [pending, rejected, published] = await Promise.all([
+  const page = (n: number) => ({ skip: (n - 1) * REVIEW_PAGE_SIZE, take: REVIEW_PAGE_SIZE + 1 });
+  const [pending, rejected, published, rejectedCount, publishedCount] = await Promise.all([
     db.article.findMany({
       where: { status: "PENDING_REVIEW" },
       orderBy: { createdAt: "asc" },
@@ -199,22 +210,25 @@ export async function getReviewQueue() {
     }),
     db.article.findMany({
       where: { status: "DRAFT" },
-      orderBy: { updatedAt: "desc" },
-      take: 20,
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      ...page(rejectedPage),
       select: reviewArticleSelect,
     }),
     db.article.findMany({
       where: { status: "PUBLISHED" },
-      orderBy: { publishedAt: "desc" },
-      take: 20,
+      orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+      ...page(publishedPage),
       select: reviewArticleSelect,
     }),
+    db.article.count({ where: { status: "DRAFT" } }),
+    db.article.count({ where: { status: "PUBLISHED" } }),
   ]);
   const failed = await db.story.findMany({
     where: { article: null, lastGenerationError: { not: null } },
     orderBy: { lastGenerationAt: "desc" },
     take: 20,
     select: {
+      id: true,
       slug: true,
       workingTitle: true,
       generationAttempts: true,
@@ -233,5 +247,14 @@ export async function getReviewQueue() {
       sources: (latest?.sources ?? []).map((s) => s.sourceItem),
     };
   };
-  return { pending: pending.map(shape), rejected: rejected.map(shape), published: published.map(shape), failed };
+  return {
+    pending: pending.map(shape),
+    rejected: rejected.slice(0, REVIEW_PAGE_SIZE).map(shape),
+    published: published.slice(0, REVIEW_PAGE_SIZE).map(shape),
+    failed,
+    pages: {
+      rejected: { page: rejectedPage, more: rejected.length > REVIEW_PAGE_SIZE, total: rejectedCount },
+      published: { page: publishedPage, more: published.length > REVIEW_PAGE_SIZE, total: publishedCount },
+    },
+  };
 }

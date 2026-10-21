@@ -9,6 +9,19 @@ import { loadGeneratedArticles } from "../helpers/generated-articles";
 
 const editorial = parseSiteConfig(validConfig()).editorial;
 const [sak] = loadGeneratedArticles();
+const NOW = new Date("2026-10-07T16:00:00Z");
+
+const promptVars = {
+  maxQuoteWords: editorial.maxQuoteWords,
+  maxQuotedWordsPerSource: editorial.maxQuotedWordsPerSource,
+  minSourcesForPersonClaims: editorial.minSourcesForPersonClaims,
+  sensitiveCategories: editorial.sensitiveCategories.join(", "),
+  categories: CATEGORIES.join(", "),
+};
+
+/** Et feilsvar fra API-et. SDK-en venter bare et millisekund før et nytt forsøk. */
+const errorResponse = (status: number) =>
+  Response.json({ type: "error", error: {} }, { status, headers: { "retry-after-ms": "1" } });
 
 describe("Claude som skriver", () => {
   beforeEach(() => vi.spyOn(console, "warn").mockImplementation(() => {}));
@@ -18,17 +31,12 @@ describe("Claude som skriver", () => {
     const { client, requests } = fakeAnthropic(() => jsonResponse(sak.good));
     const writer = createClaudeWriter(client, "claude-sonnet-5-5", editorial);
 
-    expect(await writer.write(sak.sources)).toEqual({ ok: true, article: sak.good });
+    expect(await writer.write(sak.sources, NOW)).toEqual({ ok: true, article: sak.good });
 
     const [request] = requests;
     expect(request.url).toBe("https://api.anthropic.com/v1/messages?beta=true");
     expect(request.headers.get("anthropic-beta")).toContain("server-side-fallback-2026-07-01");
-    const prompt = loadPrompt("article-write", {
-      maxQuoteWords: editorial.maxQuoteWords,
-      minSourcesForPersonClaims: editorial.minSourcesForPersonClaims,
-      sensitiveCategories: editorial.sensitiveCategories.join(", "),
-      categories: CATEGORIES.join(", "),
-    });
+    const prompt = loadPrompt("article-write", promptVars);
     expect(request.body).toMatchObject({
       model: "claude-sonnet-5-5",
       fallbacks: "default",
@@ -37,6 +45,7 @@ describe("Claude som skriver", () => {
       output_config: { effort: "medium", format: { type: "json_schema" } },
     });
     expect(prompt.text).toContain(`høyst ${editorial.maxQuoteWords} ord`);
+    expect(prompt.text).toContain(`minst ${editorial.minSourcesForPersonClaims} uavhengige kilder`);
     expect(prompt.text).not.toContain("{{");
     expect(request.body).toHaveProperty("output_config.format.schema.properties.kategori.enum", [...CATEGORIES]);
     expect(request.body).toHaveProperty(
@@ -47,7 +56,13 @@ describe("Claude som skriver", () => {
       "offentlig_person",
       "privatperson",
     ]);
+    expect(request.body).toHaveProperty(
+      "output_config.format.schema.properties.personer.items.properties.omtale.enum",
+      ["uttaler_seg", "påstand_om_personen"],
+    );
     const user = (request.body.messages as { content: string }[])[0].content;
+    // Tidspunktet i norsk tid, så relative tidsord i kildene kan regnes om.
+    expect(user).toContain("<tidspunkt>Artikkelen skrives onsdag 7. oktober 2026 kl. 18.00 (norsk tid).</tidspunkt>");
     expect(user).toContain('<kilde id="K1"');
     expect(user).toContain(sak.sources[0].text.slice(0, 40));
     expect(writer.usage).toEqual({ calls: 1, failures: 0, inputTokens: 1000, outputTokens: 400 });
@@ -67,19 +82,78 @@ describe("Claude som skriver", () => {
   ])("gir ingen artikkel ved %s, men teller tokenene", async (_name, respond, reason) => {
     const { client } = fakeAnthropic(respond);
     const writer = createClaudeWriter(client, "m", editorial);
-    const result = await writer.write(sak.sources);
-    expect(result.ok).toBe(false);
+    const result = await writer.write(sak.sources, NOW);
+    expect(result).toMatchObject({ ok: false, stopRun: false });
     expect(!result.ok && result.reason).toContain(reason);
     expect(writer.usage).toMatchObject({ calls: 1, failures: 1, inputTokens: 1000 });
   });
 
-  it("slutter å skrive etter feil nøkkel", async () => {
-    const { client, requests } = fakeAnthropic(() => Response.json({ type: "error", error: {} }, { status: 401 }));
+  it("slutter å skrive etter feil nøkkel, og ber kjøringen stoppe", async () => {
+    const { client, requests } = fakeAnthropic(() => errorResponse(401));
     const writer = createClaudeWriter(client, "m", editorial);
-    await writer.write(sak.sources);
-    const second = await writer.write(sak.sources);
+    const first = await writer.write(sak.sources, NOW);
+    const second = await writer.write(sak.sources, NOW);
     expect(requests).toHaveLength(1);
-    expect(second).toEqual({ ok: false, reason: "Skriving feilet: AuthenticationError (401)" });
+    expect(first).toEqual({ ok: false, reason: "Skriving feilet: AuthenticationError (401)", stopRun: true });
+    expect(second).toEqual(first);
+  });
+
+  it.each([
+    [429, "RateLimitError"],
+    [529, "InternalServerError"],
+  ])("prøver én gang til ved %i, og ber så kjøringen stoppe uten å gi opp saken", async (status, name) => {
+    const { client, requests } = fakeAnthropic(() => errorResponse(status));
+    const writer = createClaudeWriter(client, "m", editorial);
+    expect(await writer.write(sak.sources, NOW)).toEqual({
+      ok: false,
+      reason: `Skriving feilet: ${name} (${status})`,
+      stopRun: true,
+    });
+    expect(requests).toHaveLength(2);
+  });
+
+  it("leser svaret fra reservemodellen, ikke den avbrutte teksten før overgangen", async () => {
+    const { client } = fakeAnthropic(() =>
+      messageResponse([
+        { type: "text", text: '{"tittel":"Avbr', citations: null },
+        { type: "fallback", from: { model: "claude-sonnet-5-5" }, to: { model: "reserve" } },
+        { type: "text", text: JSON.stringify(sak.good), citations: null },
+      ]),
+    );
+    const writer = createClaudeWriter(client, "claude-sonnet-5-5", editorial);
+    expect(await writer.write(sak.sources, NOW)).toEqual({ ok: true, article: sak.good });
+  });
+
+  it("gir skrivekallet lengre tidsgrense og ett nytt forsøk", async () => {
+    const { client } = fakeAnthropic(() => jsonResponse(sak.good));
+    const create = vi.spyOn(client.beta.messages, "create");
+    await createClaudeWriter(client, "m", editorial).write(sak.sources, NOW);
+    expect(create.mock.calls[0][1]).toEqual({ timeout: 300_000, maxRetries: 1 });
+  });
+
+  it("teller tokens fra alle forsøkene når en reservemodell svarte", async () => {
+    const { client } = fakeAnthropic(() =>
+      Response.json({
+        id: "msg_test",
+        type: "message",
+        role: "assistant",
+        model: "claude-sonnet-5-5",
+        content: [{ type: "text", text: JSON.stringify(sak.good), citations: null }],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 400,
+          iterations: [
+            { type: "message", input_tokens: 1000, output_tokens: 50 },
+            { type: "fallback_message", input_tokens: 1000, output_tokens: 400 },
+          ],
+        },
+      }),
+    );
+    const writer = createClaudeWriter(client, "m", editorial);
+    await writer.write(sak.sources, NOW);
+    expect(writer.usage).toMatchObject({ inputTokens: 2000, outputTokens: 450 });
   });
 });
 
@@ -100,19 +174,13 @@ describe("Claude som moderator", () => {
     const { client, requests } = fakeAnthropic(() => jsonResponse(result));
     const moderator = createClaudeModerator(client, "claude-sonnet-5-5", editorial);
 
-    expect(await moderator.moderate(sak.sources, sak.good)).toEqual({ ok: true, result });
+    expect(await moderator.moderate(sak.sources, sak.good, NOW)).toEqual({ ok: true, result });
 
     const [request] = requests;
-    expect(request.body.system).toBe(
-      loadPrompt("article-moderate", {
-        maxQuoteWords: editorial.maxQuoteWords,
-        minSourcesForPersonClaims: editorial.minSourcesForPersonClaims,
-        sensitiveCategories: editorial.sensitiveCategories.join(", "),
-        categories: CATEGORIES.join(", "),
-      }).text,
-    );
+    expect(request.body.system).toBe(loadPrompt("article-moderate", promptVars).text);
     expect(request.body).toHaveProperty("output_config.format.schema.properties.funn.items.properties.type.enum");
     const user = (request.body.messages as { content: string }[])[0].content;
+    expect(user).toContain("<tidspunkt>");
     expect(user).toContain("<kilder>");
     expect(user).toContain(formatArticle(sak.good));
   });
@@ -122,12 +190,27 @@ describe("Claude som moderator", () => {
     expect(text.match(/<\/artikkel>/g)).toHaveLength(1);
   });
 
-  it("gir ingen vurdering ved feil", async () => {
-    const { client } = fakeAnthropic(() => Response.json({ type: "error", error: {} }, { status: 500 }));
+  it("slutter å moderere etter feil nøkkel", async () => {
+    const { client, requests } = fakeAnthropic(() => errorResponse(401));
     const moderator = createClaudeModerator(client, "m", editorial);
-    expect(await moderator.moderate(sak.sources, sak.good)).toEqual({
+    await moderator.moderate(sak.sources, sak.good, NOW);
+    expect(await moderator.moderate(sak.sources, sak.good, NOW)).toEqual({
+      ok: false,
+      reason: "Moderering feilet: AuthenticationError (401)",
+      stopRun: true,
+    });
+    expect(requests).toHaveLength(1);
+  });
+
+  it("gir ingen vurdering ved feil, og ber kjøringen stoppe ved feil hos API-et", async () => {
+    const { client } = fakeAnthropic(() => errorResponse(500));
+    const moderator = createClaudeModerator(client, "m", editorial);
+    expect(await moderator.moderate(sak.sources, sak.good, NOW)).toEqual({
       ok: false,
       reason: "Moderering feilet: InternalServerError (500)",
+      stopRun: true,
     });
+    const refusal = createClaudeModerator(fakeAnthropic(() => jsonResponse({}, "refusal")).client, "m", editorial);
+    expect(await refusal.moderate(sak.sources, sak.good, NOW)).toMatchObject({ ok: false, stopRun: false });
   });
 });

@@ -103,8 +103,9 @@ datalaget (`src/lib/admin.ts`), siden en sjekk i layouten ikke hindrer at sidens
    - **Fulltekst fra artikkelsiden** er avslått for alle kilder. Det kan slås på per kilde med `allowFullTextFetch`
      (krever åpen lisens), og hentes da bare fra kildens egne verter og bare når robots.txt og TDM-reglene
      tillater det. Hovedteksten hentes ut med Mozillas Readability.
-3. **Grupper nye elementer i saker** (se under).
-4. **Slett utløpt kildetekst** og gamle jobblogger.
+3. **Slett utløpt kildetekst** og gamle jobblogger, før teksten kan brukes videre.
+4. **Grupper nye elementer i saker** (se under).
+5. **Skriv artikler** for saker som er klare (se «Skriving og moderering»).
 
 Hver kjøring logges som en `JobRun` med resultat per kilde. To kjøringer i samme prosess kan ikke gå samtidig, og på
 tvers av prosesser (f.eks. `npm run ingest` mens serveren kjører) reserveres hver kilde atomisk i databasen, så samme
@@ -197,50 +198,82 @@ Hver kjøring lagrer antall kall og tokens i jobbloggen, også for svar som ikke
 Etter grupperingen skrives artikler for saker som er klare (`src/lib/generate/`):
 
 1. **Hvilke saker.** Saker uten artikkel, med minst `minSourcesPerStory` kilder som kan analyseres, som ikke har
-   fått nye kilder de siste `settleMinutes` minuttene, og som startet for mindre enn `maxStoryAgeHours` timer siden.
+   fått nye kilder de siste `settleMinutes` minuttene (målt både fra kildenes tid og fra når de ble lagt i saken,
+   så en kilde som hentes sent, også gir ventetid), og som startet for mindre enn `maxStoryAgeHours` timer siden.
    Høyst `maxArticlesPerRun` per kjøring, og en sak gis opp etter `maxAttemptsPerStory` mislykkede forsøk.
-2. **Kildene.** Bare tekst som kan analyseres (samme filter som grupperingen), nummerert K1, K2 … i tidsrekkefølge,
-   med utgiver og publiseringstid, kuttet etter `maxSourceCharsPerItem` og `maxSourceCharsTotal`. Teksten kan ikke
-   lage egne tagger i meldingen, og prompten sier at den er data, ikke instruksjoner.
+2. **Kildene.** Bare tekst som kan analyseres (samme filter som grupperingen) og som ikke har passert
+   sletteperioden. Kildene nummereres K1, K2 … i tidsrekkefølge, med utgiver, språk og publiseringstid i norsk tid,
+   og kuttes etter `maxSourceCharsPerItem` og `maxSourceCharsTotal`. Kuttede kilder merkes `avkortet="ja"`. Meldingen
+   starter med når artikkelen skrives, så relative tidsord («i dag», «i går») kan regnes om. Teksten kan ikke lage
+   egne tagger i meldingen, og prompten sier at den er data, ikke instruksjoner.
 3. **Skriving.** Claude (`prompts/article-write.md`) skriver tittel, ingress og brødtekst på bokmål, og fyller ut
-   kategori, sensitive temaer, personer med rolle og kilder, hvilke kilder artikkelen bygger på, og merknader om
-   usikkerhet. Svaret er strukturert output med JSON-skjema (kategorier og sensitive temaer som enum).
-4. **Automatiske kontroller** (`checks.ts`), uavhengig av Claude:
-   - direkte sitater lengre enn `maxQuoteWords` ord, eller som ikke står ordrett i en kilde
-   - ordrekker på mer enn `maxCopiedWords` ord som er like en kilde utenfor sitat
-   - tall som ikke står i kildene (eller i publiseringsdatoene)
-   - kilder som ikke finnes, privatpersoner, personer med færre enn `minSourcesForPersonClaims` kilder
-   - lenker, HTML, kildehenvisninger i teksten og lengde
+   kategori, sensitive temaer, personer (rolle, om artikkelen sier noe *om* personen eller bare gjengir hva den sier
+   i sin rolle, og hvilke kilder som nevner den), hvilke kilder artikkelen bygger på, og merknader om usikkerhet.
+   Svaret er strukturert output med JSON-skjema (kategorier og sensitive temaer som enum). Kildehenvisninger som
+   «[K1]» fjernes fra teksten før kontrollene.
+4. **Automatiske kontroller** (`checks.ts`, `quotes.ts`, `numbers.ts`), uavhengig av Claude:
+   - direkte sitater i «», “”, „“, ‹›, ‘’ eller "", og avsnitt med sitatstrek («– …, sier X»), også over flere
+     avsnitt: lengre enn `maxQuoteWords` ord, ikke ordrett i en kilde (utelatelser med […] godtas, delene må stå i
+     samme rekkefølge), og til sammen mer enn `maxQuotedWordsPerSource` ord fra samme kilde
+   - ordrekker på mer enn `maxCopiedWords` ord som er like en kilde utenfor sitat, og avsnitt der minst halvparten
+     av ordrekkene på fire ord er like én kilde (nær-kopi med små endringer)
+   - tall som ikke står i kildene, også tall skrevet med ord («tre»), med tusenskille, i millioner, som datoer og
+     som klokkeslett. Datoer godtas dagen før, samme dag og dagen etter at en kilde ble publisert (i norsk tid)
+   - kilder som ikke finnes, navngitte privatpersoner (navnet må stå i teksten), navn som ser ut som personer, men
+     ikke står i personlisten, og påstander om personer med færre enn `minSourcesForPersonClaims` uavhengige kilder
+     (kilder som nevner personen, med ulike utgivere)
+   - lenker, HTML og lengde
 5. **AI-moderering.** Et eget kall med egen prompt (`prompts/article-moderate.md`) sammenligner artikkelen setning
-   for setning med kildene og rapporterer udokumenterte påstander, feil gjengivelser, tall og sitater uten kilde,
-   kopiert tekst, privatpersoner, sensitive temaer, spekulasjon og ubalanse.
-6. **Vurdering.** Funnene samles med alvorsgrad. *Blokkerer* (for langt eller oppdiktet sitat, kopiert tekst,
-   privatperson, ukjent kilde) betyr at artikkelen ikke kan publiseres. *Høy* og *middels* flagger artikkelen.
-   Sensitive temaer (Vær Varsom) flagger alltid, og det samme gjør en moderering som ikke kunne kjøre.
-   Med `manualApproval: "ALL"` (standard) går alt til godkjenning; med `"FLAGGED_ONLY"` publiseres bare artikler
-   uten funn automatisk.
-7. **Lagring.** Artikkel, første versjon (`ArticleRevision`), kildene den bygger på (`RevisionSource`) og
-   modereringen (`ModerationReview` med alle funn) lagres i én transaksjon, sammen med modell og promptversjon.
+   for setning med kildene og rapporterer udokumenterte påstander, feil gjengivelser (også feil tidsangivelser),
+   tall og sitater uten kilde, kopiert tekst, privatpersoner, sensitive temaer, spekulasjon og ubalanse.
+6. **Vurdering.** Funnene samles med alvorsgrad. *Blokkerer* (for langt eller oppdiktet sitat på minst fire ord,
+   kopiert tekst, navngitt privatperson, ukjent kilde) betyr at artikkelen ikke kan publiseres. *Høy* og *middels*
+   flagger artikkelen for redaktøren. Sensitive temaer (Vær Varsom) flagger alltid, også når bare moderatoren
+   melder dem, og det samme gjør skriverens merknader om usikkerhet og en moderering som ikke kunne kjøre. Et
+   privatperson-funn fra moderatoren stopper publisering bare når moderatoren er sikker (alvor høy); ellers
+   vurderer redaktøren. Med `manualApproval: "ALL"` (standard) går alt til godkjenning; med `"FLAGGED_ONLY"`
+   publiseres bare artikler uten funn som krever vurdering (bare funn med alvor lav eller info) automatisk.
+7. **Lagring.** Artikkel, første versjon (`ArticleRevision`), alle kildene Claude fikk se (`RevisionSource`) og
+   modereringen (`ModerationReview` med alle funn) lagres i én transaksjon, sammen med modell og promptversjon. Er
+   kildene til saken flyttet mens artikkelen ble skrevet, lagres ingenting, og saken skrives på nytt i neste
+   kjøring.
+
+Feil hos Claude API stopper kjøringen: en ugyldig nøkkel, manglende tilgang, overbelastning, for mange kall eller
+tidsavbrudd gjelder ikke saken, så forsøket telles ikke, jobben merkes som feilet, og cron-ruten svarer 500. Bare
+feil som gjelder selve saken (avslag, svar som ikke kan tolkes) teller som forsøk. Hvert kall har en tidsgrense på
+5 minutter og ett nytt forsøk, og kjøringen starter ikke på nye saker etter 40 minutter, så den blir ferdig lenge
+før en annen prosess kan regne den som avbrutt.
 
 Admin-siden **Godkjenning** viser hver artikkel med funnene gruppert («Hindrer publisering», «Må vurderes», «Til
 orientering»), teksten og kildene. Redaktøren kan godkjenne og publisere, avvise med begrunnelse, eller slette
-utkastet så saken skrives på nytt. Publiserte artikler kan avpubliseres med begrunnelse; det føres som en ny versjon
-i endringsloggen. Saker der skrivingen feilet, vises med årsak. Flyttes kildene til en sak med et upublisert utkast
-(under Saker), slettes utkastet og skrives på nytt.
+utkastet så saken skrives på nytt. «Skriv på nytt» sletter ikke utkastet hvis saken ikke ville blitt skrevet igjen
+(for gammel, for få kilder, eller skriving ikke satt opp). Publiserte artikler kan avpubliseres med begrunnelse; det
+føres som en ny versjon i endringsloggen. Avviste og publiserte artikler vises side for side, så alle kan nås. Saker
+der skrivingen feilet, vises med årsak og en knapp for å prøve igjen (for eksempel etter at nøkkelen er rettet).
+Flyttes kildene til en sak med et upublisert utkast (under Saker), slettes utkastet og skrives på nytt.
 
 Den offentlige artikkelsiden **/sak/[slug]** viser bare publiserte artikler, med AI-merking øverst, kildene med
-lenke og kildeangivelse, «Slik ble saken laget» (modell, kontroller og om redaktøren godkjente) og endringslogg.
-Siden har maskinlesbar merking: `<meta name="ai-generated" content="true">` og strukturerte data (schema.org
-`NewsArticle` med `creator` som programvare og `isBasedOn` med kildene). En sak uten publisert artikkel gir siden
-«fant ikke» med `noindex`.
+lenke og kildeangivelse, «Slik ble saken laget» (modell, om AI-modereringen faktisk kjørte, og om redaktøren
+godkjente) og endringslogg. Siden har maskinlesbar merking: `<meta name="ai-generated" content="true">` i `<head>`
+(metadata strømmes ikke, se `htmlLimitedBots` i `next.config.ts`) og strukturerte data (schema.org `NewsArticle`
+med `creator` som programvare og `isBasedOn` med kildene). Forsiden har samme meta-tagg. En sak uten publisert
+artikkel gir siden «fant ikke» med `noindex`.
 
 Kontrollene er testet på syntetiske artikler (`tests/fixtures/generated-articles.json`): for tre saker i korpuset
 én god artikkel og fem varianter med hver sin innplantede feil (oppdiktet tall, for langt sitat, oppdiktet sitat,
-kopiert setning, navngitt privatperson). De gode artiklene gir ingen funn, og alle 15 feilene fanges
-(`npm run eval:generate`). Hvor godt Claude skriver og modererer, testes med `npm run eval:generate -- --claude`
-(krever nøkkel, seks kall). To begrensninger: tallkontrollen sammenligner tall som tegn, så et oppdiktet tall som
-tilfeldigvis står et annet sted i kildene, slipper gjennom; og hvem som er privatperson, avgjøres av skriveren og
-modereringen, ikke av de automatiske kontrollene.
+kopiert setning, navngitt privatperson). De gode artiklene gir ingen funn, og alle 15 feilene fanges og hindrer
+automatisk publisering (`npm run eval:generate`). I tillegg testes hver kontroll for seg, også sitatstrek, sitater
+over flere avsnitt, utelatelser, nær-kopier, tallord, datoer og klokkeslett. Hvor godt Claude skriver og modererer,
+testes med `npm run eval:generate -- --claude` (krever nøkkel, seks kall).
+
+**Kjente begrensninger i kontrollene.** Tallkontrollen ser bare om et tall står et sted i kildene, ikke om det
+brukes om det samme. Kopikontrollen fanger ikke en tett oversettelse av en kilde på et annet språk; der er
+modereringen eneste vern. Et oppdiktet sitat på færre enn fire ord flagges, men stopper ikke publisering (korte
+uttrykk i anførselstegn kan være navn eller begreper med en annen bøyning), og et sitat som ikke står ordrett i en
+kilde, stopper ikke publisering når noen av kildene er på et annet språk (det kan være oversatt); redaktøren
+vurderer. At en navngitt person er privatperson, avgjøres av skriveren og modereringen. Kontrollen ser i tillegg
+etter navn som ikke står i personlisten, men det er en enkel regel (to ord med stor forbokstav på rad) som både kan
+bomme og gi falske funn.
 
 ### Mappestruktur
 
@@ -340,19 +373,33 @@ aldri mot nettet: innhentingen testes med en falsk `fetch` og syntetiske eksempe
   er brukt opp, og at feil i oppsettet av Claude ikke stopper jobben
 - manuell flytting i admin: skill ut, flytt, angre, ny arbeidstittel, ikke for saker med artikkel og ikke mens
   grupperingen kjører, og at feilmeldinger bare vises fra en fast liste med koder
-- skriving og moderering: kontrollene på de syntetiske artiklene (alle innplantede feil fanges, de gode gir ingen
-  funn) og hver kontroll for seg, den samlede vurderingen, kildene Claude får (rekkefølge, budsjett, uten mulighet til
-  å lage tagger), skriver- og moderatorkallet med ekte SDK-klient (prompt med innstillingene, skjema med enum,
-  avslag, ugyldige svar), og jobben mot en ekte database (hvilke saker som er klare, lagring av artikkel, versjon,
-  kilder og moderering, automatisk publisering bare uten funn, feil og nye forsøk, samtidige prosesser)
-- godkjenning: publisering, avvisning, ny skriving og avpublisering med endringslogg, at artikler som bryter faste
+- skriving og moderering: kontrollene på de syntetiske artiklene (alle innplantede feil fanges og hindrer automatisk
+  publisering, de gode gir ingen funn) og hver kontroll for seg med grensene (sitatlengde, korte sitater,
+  sitattegn, sitatstrek, sitater over flere avsnitt, utelatelser og innskudd, samlet sitatmengde, oversatte
+  sitater, kopiert og nesten kopiert tekst, navn og titler, tall, tallord, datoer, klokkeslett, privatpersoner,
+  personpåstander, navn utenfor personlisten, lenker, HTML og lengde), den samlede vurderingen, kildene Claude får
+  (rekkefølge, budsjett, språk, avkorting, norsk tid, uten mulighet til å lage tagger), skriver- og moderatorkallet
+  med ekte SDK-klient (prompt med innstillingene, tidspunkt, skjema med enum, avslag, ugyldige svar, svar fra
+  reservemodellen, tidsgrense og nye forsøk, tokens fra alle forsøk, at feil nøkkel og overbelastning stopper
+  kjøringen), og jobben mot en ekte database (hvilke saker som er klare, lagring av artikkel, versjon, kilder og
+  moderering, automatisk publisering, feil som telles og feil som stopper kjøringen, tidsfristen, kilder som flyttes
+  eller saker som slettes underveis, og samtidige jobber og prosesser)
+- godkjenning: publisering, avvisning, ny skriving (ikke for saker som ikke ville blitt skrevet igjen), «Prøv igjen»
+  og avpublisering med endringslogg, sidevisning av publiserte og avviste artikler, at artikler som bryter faste
   regler ikke kan publiseres, og at bare publiserte artikler vises for lesere
-- brødteksten: avsnitt, mellomtitler og lister, og at HTML vises som tekst
-- hele pipelinen mot en ekte database: synkronisering, innhenting, gruppering, skriving, sletting av utløpt tekst og
-  oppsummeringen, og at slettingen kjører selv om et steg feiler
+- artikkelsiden: synlig og maskinlesbar AI-merking, strukturerte data, kildene med kreditering uten kildetekst, og
+  teksten om hvordan saken ble kontrollert, også når AI-modereringen ikke kunne kjøre
+- brødteksten: avsnitt, mellomtitler og lister (også uten tom linje imellom), nivå på mellomtitlene, og at HTML
+  vises som tekst
+- hele pipelinen mot en ekte database: synkronisering, innhenting, sletting av utløpt tekst (før grupperingen og
+  skrivingen), gruppering, skriving og oppsummeringen, at slettingen kjører selv om et steg feiler, og at en feil i
+  skrivingen meldes
 - knappene i admin: «Kjør innhenting nå», «Skill ut», «Flytt», «Marker som avbrutt», «Godkjenn og publiser», «Avvis»,
-  «Skriv på nytt» og «Avpubliser» (tilgangssjekk i server actions, validering og meldinger bare fra faste koder)
-- cron-ruten og Bearer-tokenet
+  «Skriv på nytt», «Prøv igjen» og «Avpubliser» (tilgangssjekk i server actions, validering og meldinger bare fra
+  faste koder)
+- manuell flytting med utkast: utkastet slettes når kildene flyttes eller et element skilles ut, også når saken blir
+  tom, og ingenting flyttes hvis artikkelen blir publisert mellom kontrollen og flyttingen
+- cron-ruten og Bearer-tokenet, også at en feilet eller stoppet skriving gir 500
 - tilgangskontroll for admin: hvilke ruter proxyen dekker, svarene den gir, at admin ikke kan rammes inn av andre
   nettsteder, krav til passord og at datalaget avviser forespørsler uten gyldig innlogging før databasen leses
 - datamodellen fra kilde til endringslogg, med fremmednøkler og unike nøkler, og at en sak med artikkel ikke kan

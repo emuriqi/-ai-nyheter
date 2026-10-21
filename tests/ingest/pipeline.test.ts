@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { emptyUsage } from "@/lib/ai/claude";
 import { parseSiteConfig } from "@/lib/config/schema";
 import type { Db } from "@/lib/db";
 import { runPipeline } from "@/lib/ingest/pipeline";
@@ -8,6 +9,7 @@ import { syncSourcesFromConfig } from "@/lib/sources/sync";
 import { createFakeFetch, fixture, text, xml } from "../helpers/fake-fetch";
 import { activeSource, validConfig } from "../helpers/fixtures";
 import { createTestDb } from "../helpers/test-db";
+import type { GenerateAgents } from "@/lib/generate/run";
 
 const NOW = new Date("2026-10-12T10:00:00Z");
 
@@ -79,9 +81,54 @@ describe("runPipeline", () => {
       "Kilder synkronisert: 0 nye, 3 oppdatert, 0 satt på pause.",
       "aktiv: hentet, 3 nye, 1 for gamle",
       "sperret: sperret, robots.txt sperrer /rss",
-      "Gruppering: 4 elementer, 4 nye saker, 0 lagt til eksisterende saker, 1 usikker bør sjekkes i admin.",
-      "Skriving hoppet over: Skriving er slått av i konfigurasjonen.",
+      // Den utløpte teksten slettes før grupperingen, så elementet blir ikke gruppert.
       "Sletting: kildetekst fjernet fra 1 elementer, 0 gamle jobblogger slettet.",
+      "Gruppering: 3 elementer, 3 nye saker, 0 lagt til eksisterende saker, 1 usikker bør sjekkes i admin.",
+      "Skriving hoppet over: Skriving er slått av i konfigurasjonen.",
     ]);
+  });
+
+  it("skriver artikler for saker som er klare i samme kjøring", async () => {
+    const { db: own, cleanup: done } = createTestDb();
+    try {
+      const config = parseSiteConfig(
+        validConfig({
+          sources: [activeSource({ slug: "aktiv", feedUrl: "https://example.no/rss" })],
+          generation: { ...validConfig().generation, enabled: true, settleMinutes: 0 },
+        }),
+      );
+      const write = vi.fn<GenerateAgents["writer"]["write"]>(async (sources) => ({
+        ok: true,
+        article: {
+          tittel: sources[0].title,
+          ingress: "Kilden melder om saken.",
+          brodtekst: Array(8).fill("Kilden beskriver saken med egne ord i denne syntetiske testen.").join(" "),
+          kategori: "samfunn",
+          sensitive_temaer: [],
+          personer: [],
+          kilder_brukt: sources.map((s) => s.key),
+          usikkerhet: [],
+        },
+      }));
+      const agents: GenerateAgents = {
+        writer: { write, usage: emptyUsage(), promptVersion: "w", model: "syntetisk" },
+        moderator: {
+          moderate: async () => ({ ok: true, result: { vurdering: "ok", funn: [], sensitive_temaer: [] } }),
+          usage: emptyUsage(),
+          promptVersion: "m",
+          model: "syntetisk",
+        },
+      };
+      const fake = createFakeFetch({ "https://example.no/rss": xml(fixture("rss2.xml")) });
+      const result = await runPipeline(own, { config, trigger: "test", now: NOW, fetchImpl: fake.fetchImpl, agents });
+
+      expect(result.generate.status).toBe("done");
+      const stories = await own.story.count();
+      expect(write).toHaveBeenCalledTimes(stories);
+      expect(await own.article.count({ where: { status: "PENDING_REVIEW" } })).toBe(stories);
+      expect(summarizePipeline(result).lines.at(-1)).toMatch(/^Skriving: \d+ nye artikler, \d+ venter på godkjenning/);
+    } finally {
+      await done();
+    }
   });
 });

@@ -42,14 +42,24 @@ export class ManualClusterError extends Error {
  * oppdateringsflyten (fase 5), med endringslogg. Et utkast som aldri er
  * publisert, slettes i stedet når kildene flyttes, og skrives på nytt.
  */
-async function assertNoArticle(tx: Tx | Db, storyId: string): Promise<void> {
-  const article = await tx.article.findUnique({ where: { storyId }, select: { status: true, publishedAt: true } });
-  if (article && (article.publishedAt !== null || !UNPUBLISHED_DRAFT.includes(article.status))) {
-    throw new ManualClusterError("har-artikkel");
-  }
+async function assertNoArticle(db: Db, storyId: string): Promise<void> {
+  if (await hasLockedArticle(db, [storyId])) throw new ManualClusterError("har-artikkel");
 }
 
-const UNPUBLISHED_DRAFT: string[] = ["DRAFT", "PENDING_REVIEW"];
+/**
+ * true hvis en av sakene har en artikkel som er eller har vært publisert.
+ * Sjekkes både før og inne i transaksjonen, siden en artikkel kan bli
+ * godkjent eller publisert automatisk mellom kontrollen og flyttingen.
+ */
+async function hasLockedArticle(tx: Tx | Db, storyIds: string[]): Promise<boolean> {
+  const count = await tx.article.count({
+    where: {
+      storyId: { in: storyIds },
+      OR: [{ publishedAt: { not: null } }, { status: { notIn: ["DRAFT", "PENDING_REVIEW"] } }],
+    },
+  });
+  return count > 0;
+}
 
 /** Sletter utkast som aldri er publisert, så sakene skrives på nytt med de nye kildene. */
 async function discardDrafts(tx: Tx, storyIds: string[]): Promise<void> {
@@ -151,6 +161,7 @@ export async function detachItem(db: Db, itemId: string, now = new Date()): Prom
   if (others === 0) throw new ManualClusterError("alene-i-saken");
 
   const slug = await db.$transaction(async (tx) => {
+    if (await hasLockedArticle(tx, [item.storyId])) return "har-artikkel" as const;
     const time = new Date(itemTime(item));
     const slug = await uniqueSlug(slugify(item.title), async (s) => (await tx.story.count({ where: { slug: s } })) > 0);
     const story = await tx.story.create({
@@ -171,6 +182,7 @@ export async function detachItem(db: Db, itemId: string, now = new Date()): Prom
     return slug;
   });
   if (slug === null) throw new ManualClusterError("endret-underveis");
+  if (slug === "har-artikkel") throw new ManualClusterError("har-artikkel");
   return slug;
 }
 
@@ -185,6 +197,7 @@ export async function moveItem(db: Db, itemId: string, targetStoryId: string, no
   await assertNoArticle(db, targetStoryId);
 
   const moved = await db.$transaction(async (tx) => {
+    if (await hasLockedArticle(tx, [item.storyId, targetStoryId])) return "har-artikkel" as const;
     const updated = await tx.sourceItem.updateMany({
       where: { id: item.id, storyId: item.storyId },
       data: { ...manualData(now, null), storyId: targetStoryId },
@@ -197,6 +210,7 @@ export async function moveItem(db: Db, itemId: string, targetStoryId: string, no
     }
     return true;
   });
+  if (moved === "har-artikkel") throw new ManualClusterError("har-artikkel");
   if (!moved) throw new ManualClusterError("endret-underveis");
 }
 

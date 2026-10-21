@@ -148,15 +148,34 @@ describe("manuell flytting av elementer", () => {
     await moveItem(db, ids.c, ids.flom, NOW);
     expect(await db.article.findUnique({ where: { storyId: ids.flom } })).toBeNull();
     expect(await db.story.findUniqueOrThrow({ where: { id: ids.flom } })).toMatchObject({ generationAttempts: 0 });
+  });
 
-    // Et utkast i saken som blir tom, slettes før saken slettes.
+  it("sletter utkastet før saken når det siste elementet flyttes ut", async () => {
+    // Saken om snøfokk har ett element og et utkast som venter på godkjenning.
     await db.article.create({
-      data: { storyId: ids.flom, title: "T", lede: "L", body: "B", model: "m", promptVersion: "p" },
+      data: {
+        storyId: ids.sno,
+        title: "T",
+        lede: "L",
+        body: "B",
+        model: "m",
+        promptVersion: "p",
+        status: "PENDING_REVIEW",
+      },
     });
-    const sno = await db.story.create({ data: { slug: "sno-2", workingTitle: "Snø" } });
-    for (const id of [ids.a, ids.b]) await moveItem(db, id, sno.id, NOW).catch(() => undefined);
-    await moveItem(db, ids.c, sno.id, NOW);
-    expect(await db.story.findUnique({ where: { id: ids.flom } })).toBeNull();
+    await moveItem(db, ids.c, ids.flom, NOW);
+    expect(await db.story.findUnique({ where: { id: ids.sno } })).toBeNull();
+    expect(await db.article.count({ where: { storyId: ids.sno } })).toBe(0);
+  });
+
+  it("sletter utkastet når et element skilles ut", async () => {
+    await db.article.create({
+      data: { storyId: ids.flom, title: "T", lede: "L", body: "B", model: "m", promptVersion: "p", status: "DRAFT" },
+    });
+    await db.story.update({ where: { id: ids.flom }, data: { generationAttempts: 3 } });
+    await detachItem(db, ids.b, NOW);
+    expect(await db.article.count({ where: { storyId: ids.flom } })).toBe(0);
+    expect(await db.story.findUniqueOrThrow({ where: { id: ids.flom } })).toMatchObject({ generationAttempts: 0 });
   });
 
   it("endrer ingenting mens grupperingen kjører", async () => {
@@ -197,6 +216,37 @@ describe("manuell flytting av elementer", () => {
       storyId: other.id,
       clusterMethod: "AUTO",
     });
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ["skill ut", () => detachItem(db, ids.b, NOW)],
+    ["flytt", () => moveItem(db, ids.c, ids.flom, NOW)],
+  ])("%s: flytter ikke når artikkelen blir publisert mellom kontroll og skriving", async (_name, change) => {
+    const article = await db.article.create({
+      data: {
+        storyId: ids.flom,
+        title: "T",
+        lede: "L",
+        body: "B",
+        model: "m",
+        promptVersion: "p",
+        status: "PENDING_REVIEW",
+      },
+    });
+    const original = db.$transaction.bind(db) as (fn: unknown) => Promise<unknown>;
+    vi.spyOn(db, "$transaction").mockImplementationOnce((async (fn: unknown) => {
+      // Redaktøren godkjenner artikkelen i samme øyeblikk.
+      await db.article.update({ where: { id: article.id }, data: { status: "PUBLISHED", publishedAt: NOW } });
+      return original(fn);
+    }) as never);
+    const before = await db.story.findUniqueOrThrow({ where: { id: ids.flom } });
+
+    await expect(change()).rejects.toEqual(code("har-artikkel"));
+
+    expect(await db.story.findUniqueOrThrow({ where: { id: ids.flom } })).toMatchObject({ slug: before.slug });
+    expect(await db.sourceItem.count({ where: { storyId: ids.flom } })).toBe(2);
+    expect(await db.article.findUniqueOrThrow({ where: { id: article.id } })).toMatchObject({ status: "PUBLISHED" });
     vi.restoreAllMocks();
   });
 

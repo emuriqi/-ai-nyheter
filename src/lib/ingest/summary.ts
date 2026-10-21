@@ -34,10 +34,11 @@ export function summarizePipeline(result: Awaited<ReturnType<typeof runPipeline>
   } else {
     lines.push(...ingest.sources.map(describeSource));
   }
-  lines.push(describeCluster(cluster));
-  lines.push(describeGenerate(generate));
+  // I samme rekkefølge som stegene kjører.
   lines.push(
     `Sletting: kildetekst fjernet fra ${retention.purgedSourceItems} elementer, ${retention.deletedJobRuns} gamle jobblogger slettet.`,
   );
+  lines.push(describeCluster(cluster));
+  lines.push(describeGenerate(generate));
   return { lines, sync, ingest, cluster, generate, retention };
 }

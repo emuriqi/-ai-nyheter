@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { createClaudeClient } from "@/lib/ai/claude";
 import { siteConfig } from "@/lib/config";
-import { checkArticle } from "@/lib/generate/checks";
+import { checkArticle, stripSourceRefs } from "@/lib/generate/checks";
 import { createClaudeModerator, createClaudeWriter } from "@/lib/generate/claude";
 import { decide } from "@/lib/generate/decide";
 import { loadGeneratedArticles } from "../tests/helpers/generated-articles";
@@ -34,19 +34,20 @@ if (process.argv.includes("--claude")) {
   } else {
     const writer = createClaudeWriter(client, ai.model, editorial);
     const moderator = createClaudeModerator(client, ai.model, editorial);
+    const now = new Date();
     for (const sak of saker) {
       console.log(`\n=== ${sak.event} (${sak.sources.length} kilder) ===`);
-      const written = await writer.write(sak.sources);
+      const written = await writer.write(sak.sources, now);
       if (!written.ok) {
         console.log(`Ingen artikkel: ${written.reason}`);
         continue;
       }
-      const { article } = written;
+      const { article, findings: refs } = stripSourceRefs(written.article);
       console.log(`\n${article.tittel}\n\n${article.ingress}\n\n${article.brodtekst}\n`);
       const decision = decide(
         article,
-        checkArticle(article, sak.sources, editorial),
-        await moderator.moderate(sak.sources, article),
+        [...refs, ...checkArticle(article, sak.sources, editorial)],
+        await moderator.moderate(sak.sources, article, now),
         editorial,
       );
       console.log(`Vurdering: ${decision.verdict}${decision.blocked ? " (bryter faste regler)" : ""}`);

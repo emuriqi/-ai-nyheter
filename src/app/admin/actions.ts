@@ -12,7 +12,14 @@ import {
   moveItem,
 } from "@/lib/cluster/manual";
 import { siteConfig } from "@/lib/config";
-import { approveArticle, regenerateArticle, rejectArticle, ReviewError, unpublishArticle } from "@/lib/generate/review";
+import {
+  approveArticle,
+  regenerateArticle,
+  rejectArticle,
+  retryStory,
+  ReviewError,
+  unpublishArticle,
+} from "@/lib/generate/review";
 import { getDb } from "@/lib/db";
 import { runPipeline } from "@/lib/ingest/pipeline";
 
@@ -110,7 +117,15 @@ export async function regenerateArticleAction(formData: FormData): Promise<void>
   await requireAdmin();
   const articleId = readId(formData, "articleId");
   if (!articleId) redirect("/admin/godkjenning?melding=ugyldig");
-  await runReview(() => regenerateArticle(getDb(), articleId), "skrives-paa-nytt");
+  await runReview(() => regenerateArticle(getDb(), articleId, { config: siteConfig }), "skrives-paa-nytt");
+}
+
+/** «Prøv igjen» for en sak der skrivingen har feilet. */
+export async function retryStoryAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const storyId = readId(formData, "storyId");
+  if (!storyId) redirect("/admin/godkjenning?melding=ugyldig");
+  await runReview(() => retryStory(getDb(), storyId, { config: siteConfig }), "proves-igjen");
 }
 
 /** «Avpubliser» med begrunnelse. */

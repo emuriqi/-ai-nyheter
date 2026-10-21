@@ -15,3 +15,12 @@ export const ANALYZABLE_ITEM = {
     OR: [{ tdmReservationFound: null }, { tdmReservationFound: false }],
   },
 } satisfies Prisma.SourceItemWhereInput;
+
+/**
+ * Som ANALYZABLE_ITEM, og teksten har heller ikke passert sletteperioden (selv
+ * om slettingen ikke har kjørt ennå). Brukes når teksten sendes til Claude for
+ * å skrive en artikkel.
+ */
+export function analyzableItemAt(now: Date) {
+  return { ...ANALYZABLE_ITEM, deleteAfter: { gt: now } } satisfies Prisma.SourceItemWhereInput;
+}

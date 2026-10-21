@@ -13,6 +13,7 @@ const row = (n: number, overrides: Partial<SourceRow> = {}): SourceRow => ({
   bodyText: null,
   publishedAt: new Date(Date.UTC(2026, 9, 7, n)),
   fetchedAt: new Date(Date.UTC(2026, 9, 7, n, 5)),
+  language: "nb",
   source: { name: "NVE nyheter", publisher: "NVE" },
   ...overrides,
 });
@@ -49,6 +50,10 @@ describe("kildene til en artikkel", () => {
       maxSourceCharsTotal: 3000,
     });
     for (const s of sources) expect(s.text.length).toBeLessThanOrEqual(1500);
+    expect(sources.map((s) => s.truncated)).toEqual([true, true]);
+    expect(both.truncated).toBe(false);
+    // Et utdrag som allerede er kuttet i feeden, regnes også som avkortet.
+    expect(prepareSources([row(1, { excerpt: "Starten av saken …" })], settings)[0].truncated).toBe(true);
   });
 
   it("lar ikke kildeteksten lage egne tagger i meldingen", () => {
@@ -61,6 +66,16 @@ describe("kildene til en artikkel", () => {
     expect(message).not.toContain('<kilde id="K9">');
     expect(message.match(/<kilde /g)).toHaveLength(1);
     expect(message.match(/<\/kilder>/g)).toHaveLength(1);
-    expect(message).toContain('<kilde id="K1" utgiver="NVE" publisert="2026-10-07T01:00:00.000Z">');
+    expect(message).toContain('<kilde id="K1" utgiver="NVE" publisert="onsdag 7. oktober 2026 kl. 03.00" språk="nb">');
+  });
+
+  it("merker kilder som er avkortet, og oppgir språket", () => {
+    const message = formatSources(
+      prepareSources([row(1, { bodyText: "ord ".repeat(5000), language: "en" })], {
+        ...settings,
+        maxSourceCharsPerItem: 1000,
+      }),
+    );
+    expect(message).toContain('språk="en" avkortet="ja">');
   });
 });

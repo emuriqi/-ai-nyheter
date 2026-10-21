@@ -2,7 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { runClusterJob } from "@/lib/cluster/run";
 import { parseSiteConfig } from "@/lib/config/schema";
 import type { Db } from "@/lib/db";
-import { runPipeline } from "@/lib/ingest/pipeline";
+import { runGenerateJob } from "@/lib/generate/run";
+import { pipelineFailed, runPipeline } from "@/lib/ingest/pipeline";
 import { runIngestJob } from "@/lib/ingest/run";
 import { summarizePipeline } from "@/lib/ingest/summary";
 import { computeDeleteAfter, DAY_MS } from "@/lib/retention";
@@ -13,6 +14,10 @@ import { createTestDb } from "../helpers/test-db";
 vi.mock("@/lib/cluster/run", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/cluster/run")>()),
   runClusterJob: vi.fn(),
+}));
+vi.mock("@/lib/generate/run", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/generate/run")>()),
+  runGenerateJob: vi.fn(async () => ({ status: "skipped", reason: "Skriving er slått av" })),
 }));
 vi.mock("@/lib/ingest/run", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/ingest/run")>()),
@@ -80,5 +85,33 @@ describe("runPipeline når et steg feiler", () => {
     expect(await db.jobRun.findMany({ select: { type: true, status: true } })).toEqual([
       { type: "PURGE", status: "SUCCEEDED" },
     ]);
+  });
+
+  it("sletter utløpt tekst før grupperingen og skrivingen kan bruke den", async () => {
+    vi.mocked(runIngestJob).mockResolvedValueOnce({ status: "done", jobId: "x", sources: [] });
+    let excerptWhenClustering: string | null | undefined;
+    vi.mocked(runClusterJob).mockImplementationOnce(async () => {
+      excerptWhenClustering = (await db.sourceItem.findFirstOrThrow({ where: { guid: "utlopt" } })).excerpt;
+      return { status: "skipped", reason: "test" };
+    });
+
+    await runPipeline(db, { config, trigger: "test", now: NOW });
+
+    expect(excerptWhenClustering).toBeNull();
+  });
+
+  it("melder feilen og slår alarm når skrivingen kaster", async () => {
+    vi.mocked(runIngestJob).mockResolvedValueOnce({ status: "done", jobId: "x", sources: [] });
+    vi.mocked(runClusterJob).mockResolvedValueOnce({ status: "skipped", reason: "test" });
+    vi.mocked(runGenerateJob).mockRejectedValueOnce(new Error("databasen er låst"));
+
+    const result = await runPipeline(db, { config, trigger: "test", now: NOW });
+
+    expect(result.generate).toEqual({ status: "failed", reason: "databasen er låst" });
+    expect(pipelineFailed(result)).toBe(true);
+    expect(await db.sourceItem.findFirstOrThrow({ where: { guid: "utlopt" } })).toMatchObject({ excerpt: null });
+    expect(summarizePipeline(result).lines).toContain(
+      "Skriving feilet: databasen er låst. Sakene prøves igjen i neste kjøring.",
+    );
   });
 });

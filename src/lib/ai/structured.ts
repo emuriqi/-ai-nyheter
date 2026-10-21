@@ -1,6 +1,12 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
-import { type ClaudeUsage, describeClaudeError, isFatalClaudeError, SERVER_SIDE_FALLBACK_BETA } from "./claude";
+import {
+  type ClaudeUsage,
+  describeClaudeError,
+  isFatalClaudeError,
+  isTransientClaudeError,
+  SERVER_SIDE_FALLBACK_BETA,
+} from "./claude";
 
 export type StructuredRequest<T> = {
   model: string;
@@ -14,9 +20,17 @@ export type StructuredRequest<T> = {
   maxTokens: number;
   /** Tidsgrense for dette kallet. Skriving tar lenger tid enn klassifisering. */
   timeoutMs?: number;
+  /** Nye forsøk i SDK-en for dette kallet. Utelatt: klientens innstilling. */
+  maxRetries?: number;
 };
 
-export type StructuredResult<T> = { ok: true; data: T } | { ok: false; reason: string; fatal: boolean };
+/**
+ * `fatal`: nøkkel, tilgang eller modell er feil, så ingen flere kall bør gjøres.
+ * `transient`: API-et eller nettverket feilet midlertidig; forespørselen kan være i orden.
+ */
+export type StructuredResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; reason: string; fatal: boolean; transient: boolean };
 
 /**
  * Ett kall til Claude med strukturert svar (JSON-skjema), reservemodell ved
@@ -42,18 +56,32 @@ export async function callStructured<T>(
         system: request.system,
         messages: [{ role: "user", content: request.user }],
       },
-      request.timeoutMs ? { timeout: request.timeoutMs } : undefined,
+      {
+        ...(request.timeoutMs ? { timeout: request.timeoutMs } : {}),
+        ...(request.maxRetries !== undefined ? { maxRetries: request.maxRetries } : {}),
+      },
     );
   } catch (error) {
     usage.failures++;
-    return { ok: false, reason: `feilet: ${describeClaudeError(error)}`, fatal: isFatalClaudeError(error) };
+    return {
+      ok: false,
+      reason: `feilet: ${describeClaudeError(error)}`,
+      fatal: isFatalClaudeError(error),
+      transient: isTransientClaudeError(error),
+    };
   }
 
-  usage.inputTokens += response.usage.input_tokens;
-  usage.outputTokens += response.usage.output_tokens;
+  const tokens = countTokens(response.usage);
+  usage.inputTokens += tokens.input;
+  usage.outputTokens += tokens.output;
   if (response.stop_reason !== "end_turn") {
     usage.failures++;
-    return { ok: false, reason: `uten svar: stop_reason ${response.stop_reason ?? "mangler"}`, fatal: false };
+    return {
+      ok: false,
+      reason: `uten svar: stop_reason ${response.stop_reason ?? "mangler"}`,
+      fatal: false,
+      transient: false,
+    };
   }
   // Den siste tekstblokken er svaret, også etter en overgang til reservemodellen.
   const text = response.content.findLast((block) => block.type === "text");
@@ -67,9 +95,25 @@ export async function callStructured<T>(
   }
   if (!parsed?.success) {
     usage.failures++;
-    return { ok: false, reason: "uten svar: svaret kunne ikke tolkes", fatal: false };
+    return { ok: false, reason: "uten svar: svaret kunne ikke tolkes", fatal: false, transient: false };
   }
   return { ok: true, data: parsed.data };
+}
+
+/**
+ * Tokens for hele kallet. Svarte en reservemodell, står hvert forsøk for seg i
+ * usage.iterations, også forsøket som ble avvist; da summeres de.
+ */
+function countTokens(usage: Anthropic.Beta.BetaUsage): { input: number; output: number } {
+  const iterations = usage.iterations ?? [];
+  if (!iterations.some((i) => i.type === "fallback_message")) {
+    return { input: usage.input_tokens, output: usage.output_tokens };
+  }
+  const sampled = iterations.filter((i) => i.type === "message" || i.type === "fallback_message");
+  return {
+    input: sampled.reduce((sum, i) => sum + i.input_tokens, 0),
+    output: sampled.reduce((sum, i) => sum + i.output_tokens, 0),
+  };
 }
 
 /** Gjør kildetekst om så den ikke kan lage egne tagger i meldingen til Claude. */

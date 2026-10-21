@@ -5,6 +5,7 @@ import {
   approveArticle,
   regenerateArticle,
   rejectArticle,
+  retryStory,
   reviewMessage,
   unpublishArticle,
 } from "@/lib/generate/review";
@@ -31,6 +32,10 @@ const NOW = new Date("2026-10-08T12:00:00Z");
 const LATER = new Date("2026-10-08T13:00:00Z");
 const regn = loadGeneratedArticles().find((s) => s.event === "regn-agder")!;
 const code = (c: string) => expect.objectContaining({ code: c });
+const base = clusterConfig({}, CORPUS_SOURCES);
+const config = { ...base, generation: { ...base.generation, enabled: true } };
+/** Skriving er satt opp, uten at testene trenger en ekte nøkkel. */
+const rewrite = { config, now: NOW, canWrite: true };
 
 describe("godkjenning av artikler", () => {
   let db: Db;
@@ -38,9 +43,8 @@ describe("godkjenning av artikler", () => {
   let storyId: string;
 
   async function generate(article: WrittenArticle) {
-    const base = clusterConfig({}, CORPUS_SOURCES);
     await runGenerateJob(db, {
-      config: { ...base, generation: { ...base.generation, enabled: true } },
+      config,
       trigger: "test",
       now: NOW,
       agents: {
@@ -130,7 +134,7 @@ describe("godkjenning av artikler", () => {
     });
 
     await db.story.update({ where: { id: storyId }, data: { generationAttempts: 2 } });
-    await regenerateArticle(db, article.id);
+    await regenerateArticle(db, article.id, { ...rewrite, now: new Date("2026-10-10T09:00:00Z") });
     expect(await db.article.count()).toBe(0);
     expect(await db.articleRevision.count()).toBe(0);
     expect(await db.story.findUniqueOrThrow({ where: { id: storyId } })).toMatchObject({ generationAttempts: 0 });
@@ -158,8 +162,40 @@ describe("godkjenning av artikler", () => {
     expect(await getPublishedArticle("flom-i-agder")).toBeNull();
 
     // En artikkel som har vært publisert, skrives ikke på nytt her.
-    await expect(regenerateArticle(db, article.id)).rejects.toEqual(code("har-vaert-publisert"));
+    await expect(regenerateArticle(db, article.id, rewrite)).rejects.toEqual(code("har-vaert-publisert"));
     await expect(unpublishArticle(db, article.id, "Igjen.", LATER)).rejects.toEqual(code("ikke-publisert"));
+  });
+
+  it("beholder utkastet når saken ikke ville blitt skrevet på nytt", async () => {
+    const article = await generate(regn.good);
+    await expect(regenerateArticle(db, article.id, { ...rewrite, canWrite: false })).rejects.toEqual(
+      code("skriving-av"),
+    );
+    const old = { ...rewrite, now: new Date("2026-10-12T12:00:00Z") };
+    await expect(regenerateArticle(db, article.id, old)).rejects.toEqual(code("for-gammel"));
+    // Saken startet 7. oktober kl. 10.14 UTC og er for gammel fra 10. oktober kl. 10.14. Med en time igjen
+    // er det ikke sikkert at en kjøring rekker den (to intervaller på 30 minutter), så utkastet beholdes.
+    const almost = { ...rewrite, now: new Date("2026-10-10T09:30:00Z") };
+    await expect(regenerateArticle(db, article.id, almost)).rejects.toEqual(code("for-gammel"));
+    await db.sourceItem.updateMany({ where: { storyId }, data: { purgedAt: NOW, excerpt: null, bodyText: null } });
+    await expect(regenerateArticle(db, article.id, rewrite)).rejects.toEqual(code("for-faa-kilder"));
+    expect(await db.article.count()).toBe(1);
+  });
+
+  it("prøver en sak der skrivingen har feilet, igjen", async () => {
+    await db.story.update({
+      where: { id: storyId },
+      data: { generationAttempts: 3, lastGenerationError: "Skriving feilet: AuthenticationError (401)" },
+    });
+    await retryStory(db, storyId, rewrite);
+    expect(await db.story.findUniqueOrThrow({ where: { id: storyId } })).toMatchObject({
+      generationAttempts: 0,
+      lastGenerationError: null,
+    });
+    await expect(retryStory(db, "finnesikke", rewrite)).rejects.toEqual(code("ukjent-sak"));
+    await expect(retryStory(db, storyId, { ...rewrite, canWrite: false })).rejects.toEqual(code("skriving-av"));
+    await generate(regn.good);
+    await expect(retryStory(db, storyId, rewrite)).rejects.toEqual(code("har-artikkel"));
   });
 
   it("avviser ukjente artikler", async () => {

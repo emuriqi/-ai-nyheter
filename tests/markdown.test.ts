@@ -1,4 +1,7 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { ArticleBody } from "@/components/article-body";
 import { parseBody } from "@/lib/markdown";
 
 describe("brødtekst i Markdown", () => {
@@ -28,5 +31,21 @@ describe("brødtekst i Markdown", () => {
       { type: "paragraph", text: "Første." },
       { type: "paragraph", text: "Andre." },
     ]);
+  });
+
+  it("tolker mellomtitler og lister også uten tom linje før eller etter", () => {
+    expect(parseBody("Innledning.\n## Bakgrunn\nRegjeringen opplyser at\n- én\n- to\nSiste linje.")).toEqual([
+      { type: "paragraph", text: "Innledning." },
+      { type: "heading", text: "Bakgrunn" },
+      { type: "paragraph", text: "Regjeringen opplyser at" },
+      { type: "list", items: ["én", "to"] },
+      { type: "paragraph", text: "Siste linje." },
+    ]);
+  });
+
+  it("gir mellomtitlene nivået som passer der teksten vises", () => {
+    const body = "## Bakgrunn\n\nTekst.";
+    expect(renderToStaticMarkup(createElement(ArticleBody, { body }))).toContain("<h2");
+    expect(renderToStaticMarkup(createElement(ArticleBody, { body, headingLevel: 4 }))).toContain("<h4");
   });
 });

@@ -2,12 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { ArticleBody } from "@/components/article-body";
-import { getReviewQueue } from "@/lib/admin";
+import { getReviewQueue, pageNumber } from "@/lib/admin";
 import { siteConfig } from "@/lib/config";
 import { formatDateTime } from "@/lib/format";
 import type { Finding } from "@/lib/generate/findings";
 import { reviewMessage } from "@/lib/generate/review";
-import { approveArticleAction, regenerateArticleAction, rejectArticleAction, unpublishArticleAction } from "../actions";
+import {
+  approveArticleAction,
+  regenerateArticleAction,
+  rejectArticleAction,
+  retryStoryAction,
+  unpublishArticleAction,
+} from "../actions";
 
 export const metadata: Metadata = { title: "Godkjenning" };
 
@@ -39,11 +45,14 @@ export default function ReviewPage({ searchParams }: PageProps<"/admin/godkjenni
 }
 
 async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjenning">["searchParams"] }) {
-  const { pending, rejected, published, failed } = await getReviewQueue();
-  const { melding } = await searchParams;
+  const { melding, avvist, publisert } = await searchParams;
+  const { pending, rejected, published, failed, pages } = await getReviewQueue({
+    rejectedPage: pageNumber(avvist),
+    publishedPage: pageNumber(publisert),
+  });
   // Bare kjente koder vises. Fritekst fra adressen vises aldri.
   const message = reviewMessage(melding);
-  const { editor, editorial } = siteConfig;
+  const { editor, editorial, generation } = siteConfig;
 
   return (
     <div className="space-y-10">
@@ -51,7 +60,7 @@ async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjen
         Artiklene er skrevet av Claude ut fra kildene og kontrollert automatisk og av en egen AI-moderering.{" "}
         {editorial.manualApproval === "ALL"
           ? "Alle artikler må godkjennes her før de publiseres."
-          : "Artikler uten funn publiseres automatisk; flaggede artikler må godkjennes her."}{" "}
+          : "Artikler uten funn som krever vurdering, publiseres automatisk; flaggede artikler må godkjennes her."}{" "}
         Artikler som bryter faste regler (for langt eller oppdiktet sitat, kopiert tekst, privatperson, ukjent kilde),
         kan ikke publiseres.
       </p>
@@ -89,12 +98,21 @@ async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjen
           <h2 className="font-semibold">Saker der skrivingen feilet</h2>
           <ul className="mt-2 space-y-2 text-sm">
             {failed.map((story) => (
-              <li key={story.slug}>
-                {story.workingTitle}{" "}
-                <span className="text-muted">
-                  · {story.generationAttempts} {story.generationAttempts === 1 ? "forsøk" : "forsøk"} · sist{" "}
-                  {formatDateTime(story.lastGenerationAt)} · {story.lastGenerationError}
+              <li key={story.slug} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>
+                  {story.workingTitle}{" "}
+                  <span className="text-muted">
+                    · {story.generationAttempts} forsøk
+                    {story.generationAttempts >= generation.maxAttemptsPerStory && " (gitt opp)"} · sist{" "}
+                    {formatDateTime(story.lastGenerationAt)} · {story.lastGenerationError}
+                  </span>
                 </span>
+                <form action={retryStoryAction}>
+                  <input type="hidden" name="storyId" value={story.id} />
+                  <button type="submit" className={button}>
+                    Prøv igjen
+                  </button>
+                </form>
               </li>
             ))}
           </ul>
@@ -102,7 +120,7 @@ async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjen
       )}
 
       <section>
-        <h2 className="font-semibold">Avvist</h2>
+        <h2 className="font-semibold">Avvist ({pages.rejected.total})</h2>
         {rejected.length === 0 ? (
           <p className="mt-2 text-sm text-muted">Ingen avviste artikler.</p>
         ) : (
@@ -123,10 +141,11 @@ async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjen
             ))}
           </ul>
         )}
+        <Pager param="avvist" other={{ publisert: pages.published.page }} {...pages.rejected} />
       </section>
 
       <section>
-        <h2 className="font-semibold">Publisert</h2>
+        <h2 className="font-semibold">Publisert ({pages.published.total})</h2>
         {published.length === 0 ? (
           <p className="mt-2 text-sm text-muted">Ingen publiserte artikler.</p>
         ) : (
@@ -156,9 +175,45 @@ async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjen
             ))}
           </ul>
         )}
+        <Pager param="publisert" other={{ avvist: pages.rejected.page }} {...pages.published} />
       </section>
     </div>
   );
+}
+
+/** Lenker til nyere og eldre artikler i en liste. Sidetallet for den andre listen beholdes. */
+function Pager({
+  param,
+  other,
+  page,
+  more,
+}: {
+  param: string;
+  other: Record<string, number>;
+  page: number;
+  more: boolean;
+}) {
+  if (page === 1 && !more) return null;
+  const href = (n: number) => `/admin/godkjenning?${new URLSearchParams({ ...stringify(other), [param]: String(n) })}`;
+  return (
+    <nav aria-label="Flere artikler" className="mt-3 flex gap-4 text-sm">
+      {page > 1 && (
+        <Link href={href(page - 1)} className="text-accent hover:underline">
+          ← Nyere
+        </Link>
+      )}
+      <span className="text-muted">Side {page}</span>
+      {more && (
+        <Link href={href(page + 1)} className="text-accent hover:underline">
+          Eldre →
+        </Link>
+      )}
+    </nav>
+  );
+}
+
+function stringify(values: Record<string, number>): Record<string, string> {
+  return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, String(v)]));
 }
 
 function ReviewCard({ article }: { article: QueueArticle }) {
@@ -196,7 +251,7 @@ function ReviewCard({ article }: { article: QueueArticle }) {
         <h3 className="font-serif text-2xl font-bold leading-tight">{article.title}</h3>
         <p className="mt-2 text-lg">{article.lede}</p>
         <div className="mt-4">
-          <ArticleBody body={article.body} />
+          <ArticleBody body={article.body} headingLevel={4} />
         </div>
       </div>
 
