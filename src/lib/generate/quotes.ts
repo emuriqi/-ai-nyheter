@@ -24,11 +24,14 @@ const SPEECH =
   "utdyper|utdypet|fastslår|fastslo|erkjenner|erkjente|innrømmer|innrømmet|anslår|anslo|minner om|heter det|ifølge";
 
 /**
- * Der et sitat med sitatstrek slutter og den som siteres, nevnes: «, sier hun»
- * eller en egen setning som «. Det sier hydrologen».
+ * Der et sitat med sitatstrek slutter og den som siteres, nevnes: «, sier hun»,
+ * eller en egen, kort siste setning som «. Det sier hydrolog Ola Hansen.».
+ * Den siste formen godtas bare helt til slutt i avsnittet, så setninger i
+ * sitatet som «Det sier seg selv …» eller «Dette bekrefter …» ikke kutter det.
  */
 const ATTRIBUTION = new RegExp(
-  String.raw`[,?!]\s+(?:[–—]\s+)?(?:${SPEECH})(?![\p{L}\p{N}])|[.!?]\s+(?:Det|Dette)\s+(?:${SPEECH})(?![\p{L}\p{N}])`,
+  String.raw`[,?!]\s+(?:[–—]\s+)?(?:${SPEECH})(?![\p{L}\p{N}])` +
+    String.raw`|[.!?]\s+(?:Det|Dette)\s+(?:sier|sa|skriver|skrev|opplyser|opplyste|forteller|fortalte|uttaler|uttalte)\s+(?!seg\b)[^.!?]{1,80}[.!?]?\s*$`,
   "u",
 );
 

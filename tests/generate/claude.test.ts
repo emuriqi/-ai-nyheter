@@ -1,7 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isFatalClaudeError, isTransientClaudeError } from "@/lib/ai/claude";
+import { emptyUsage } from "@/lib/ai/claude";
 import { loadPrompt } from "@/lib/ai/prompts";
+import { callStructured } from "@/lib/ai/structured";
 import { parseSiteConfig } from "@/lib/config/schema";
 import { createClaudeModerator, createClaudeWriter, formatArticle } from "@/lib/generate/claude";
 import { CATEGORIES } from "@/lib/generate/schema";
@@ -241,10 +244,50 @@ describe("feil fra Claude API", () => {
     expect(isTransientClaudeError(new Anthropic.APIConnectionError({ message: "nede" }))).toBe(true);
   });
 
-  it("teller tidsavbrudd mot saken, siden et langt svar kan være årsaken", () => {
-    for (const error of [new Anthropic.APIConnectionTimeoutError(), apiError(504)]) {
-      expect([isTransientClaudeError(error), isFatalClaudeError(error)]).toEqual([false, false]);
-    }
+  it("teller tidsavbrudd under behandlingen hos API-et (504) mot saken", () => {
+    expect([isTransientClaudeError(apiError(504)), isFatalClaudeError(apiError(504))]).toEqual([false, false]);
+  });
+
+  const request = (timeoutMs: number) => ({
+    model: "m",
+    system: "s",
+    user: "u",
+    jsonSchema: { type: "object" },
+    parser: z.object({}),
+    effort: "low" as const,
+    maxTokens: 10,
+    timeoutMs,
+    maxRetries: 0,
+  });
+
+  it("stopper kjøringen når tilkoblingen går ut på tid (nettet er nede)", async () => {
+    const client = new Anthropic({
+      apiKey: "test-nokkel",
+      maxRetries: 0,
+      fetch: (async () => {
+        throw new TypeError("connect ETIMEDOUT 160.79.104.10:443");
+      }) as typeof fetch,
+    });
+    const result = await callStructured(client, request(60_000), emptyUsage());
+    expect(result).toMatchObject({ ok: false, transient: true, fatal: false });
+  });
+
+  it("teller et kall som brukte hele tidsgrensen, mot saken", async () => {
+    const client = new Anthropic({
+      apiKey: "test-nokkel",
+      maxRetries: 0,
+      // Svarer aldri; SDK-en avbryter når tidsgrensen er nådd.
+      fetch: ((_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) =>
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))),
+        )) as typeof fetch,
+    });
+    const result = await callStructured(client, request(50), emptyUsage());
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "feilet: APIConnectionTimeoutError (ingen status)",
+      transient: false,
+    });
   });
 
   it.each([

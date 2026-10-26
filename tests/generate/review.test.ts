@@ -182,6 +182,14 @@ describe("godkjenning av artikler", () => {
     expect(await db.article.count()).toBe(1);
   });
 
+  it("bruker høyst halve aldersgrensen som margin når grensen er kort", async () => {
+    const article = await generate(regn.good);
+    const short = { ...config, generation: { ...config.generation, maxStoryAgeHours: 3 } };
+    await db.story.update({ where: { id: storyId }, data: { firstSeenAt: new Date(NOW.getTime() - 20 * 60_000) } });
+    await regenerateArticle(db, article.id, { config: short, now: NOW, canWrite: true });
+    expect(await db.article.count()).toBe(0);
+  });
+
   it("prøver en sak der skrivingen har feilet, igjen", async () => {
     await db.story.update({
       where: { id: storyId },

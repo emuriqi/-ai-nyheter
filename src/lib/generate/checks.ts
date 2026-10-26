@@ -269,11 +269,15 @@ const DESCRIPTORS = new Set(
 
 /**
  * Ordene i et navn: de med stor forbokstav, uten det som står i parentes
- * («(Ap)») eller etter komma («, Vennesla»), og uten ord som bare beskriver
- * personen. «Ola» og «Hansen» i «hydrolog Ola Hansen (Ap)».
+ * («(Ap)», «(34)»), etter komma («, Vennesla») eller fra en preposisjon
+ * («fra Bergen», «i 40-årene»), og uten ord som bare beskriver personen.
+ * «Ola» og «Hansen» i «hydrolog Ola Hansen (Ap)».
  */
 function nameWords(name: string): string[] {
-  const core = name.replace(/\([^)]*\)/g, " ").split(",")[0];
+  const core = name
+    .replace(/\([^)]*\)/g, " ")
+    .split(",")[0]
+    .split(/\s+(?:fra|i|på|ved|av|med)\s+/iu)[0];
   return tokens(core)
     .filter((t) => /^\p{Lu}\p{Ll}/u.test(t.raw) && !DESCRIPTORS.has(t.norm))
     .map((t) => t.raw);
@@ -299,8 +303,10 @@ function checkPersons(article: WrittenArticle, text: string, sources: PreparedSo
   return article.personer.flatMap((person): Finding[] => {
     const name = nameWords(person.navn);
     if (person.rolle === "privatperson") {
-      // Ett navneord i teksten er nok: fornavn, etternavn eller navnet i genitiv.
-      if (name.some((w) => articleWords.has(w))) {
+      // Etternavnet (siste navneord) i teksten, også i genitiv, er nok. Et fornavn alene kan være et annet
+      // menneske eller et vanlig ord («Per i dag»).
+      const surname = name.at(-1);
+      if (surname && articleWords.has(surname)) {
         return [
           {
             origin: "skriver",
@@ -317,7 +323,8 @@ function checkPersons(article: WrittenArticle, text: string, sources: PreparedSo
           origin: "skriver",
           kind: "privatperson_omtalt",
           severity: "middels",
-          message: "Artikkelen omtaler en privatperson uten navn. Sjekk at personen ikke kan identifiseres.",
+          message:
+            "Artikkelen omtaler en privatperson, men navnet ser ikke ut til å stå i teksten. Sjekk at personen ikke kan identifiseres.",
           excerpt: person.navn,
         },
       ];
@@ -431,14 +438,21 @@ function checkForm(article: WrittenArticle, text: string): Finding[] {
 
 /** Kildehenvisninger i parentes eller klammer: [K1], (K1, K2), [K1–K3], (K1 og K2), (kilde: K1). */
 const SOURCE_REF = /\s?[[(](?:kilder?:\s*)?K\d+(?:\s*(?:[,;/–-]|og)\s*K\d+)*[\])]/gi;
-/** En kildenøkkel som står igjen i teksten, som i «ifølge K2». */
-const BARE_KEY = /(?<![\p{L}\p{N}])K\d{1,2}(?![\p{L}\p{N}])/u;
+/**
+ * En kildenøkkel som står igjen i løpende tekst, som i «ifølge K2» eller «K1 og K2».
+ * Bare etter ord som viser til en kilde, så navn som «K2-fjellet» og «Kongsberg K2» ikke regnes med.
+ */
+const BARE_KEY = /(?<![\p{L}\p{N}])(?:ifølge|kilde|kilden|kildene|se|jf\.?|og|fra)\s+(K\d{1,2})(?![\p{L}\p{N}-])/iu;
 
 /**
  * Fjerner kildehenvisninger som [K1] fra teksten. De er interne nøkler og
  * skal ikke vises for leserne. Gir et funn til orientering når noe ble fjernet.
  */
-export function stripSourceRefs(article: WrittenArticle): { article: WrittenArticle; findings: Finding[] } {
+export function stripSourceRefs(
+  article: WrittenArticle,
+  /** Nøklene til kildene artikkelen fikk. Utelatt: alle nøkler som K1, K2 … */
+  keys?: string[],
+): { article: WrittenArticle; findings: Finding[] } {
   const found = [article.tittel, article.ingress, article.brodtekst].flatMap((t) => t.match(SOURCE_REF) ?? []);
   const strip = (t: string) => t.replace(SOURCE_REF, "");
   const cleaned =
@@ -462,12 +476,12 @@ export function stripSourceRefs(article: WrittenArticle): { article: WrittenArti
   }
   // Står en nøkkel igjen i løpende tekst, kan den ikke fjernes uten å ødelegge setningen.
   const bare = [cleaned.tittel, cleaned.ingress, cleaned.brodtekst].join("\n").match(BARE_KEY);
-  if (bare) {
+  if (bare && (!keys || keys.includes(bare[1]))) {
     findings.push({
       origin: "kontroll",
       kind: "kildehenvisning_i_teksten",
       severity: "middels",
-      message: `Teksten viser til «${bare[0]}», en intern kildenøkkel som ikke betyr noe for leserne.`,
+      message: `Teksten viser til «${bare[1]}», en intern kildenøkkel som ikke betyr noe for leserne.`,
       excerpt: bare[0],
     });
   }

@@ -42,7 +42,10 @@ if (process.argv.includes("--claude")) {
         console.log(`Ingen artikkel: ${written.reason}`);
         continue;
       }
-      const { article, findings: refs } = stripSourceRefs(written.article);
+      const { article, findings: refs } = stripSourceRefs(
+        written.article,
+        sak.sources.map((s) => s.key),
+      );
       console.log(`\n${article.tittel}\n\n${article.ingress}\n\n${article.brodtekst}\n`);
       const decision = decide(
         article,

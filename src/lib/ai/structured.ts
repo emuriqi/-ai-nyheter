@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
 import {
   type ClaudeUsage,
@@ -44,6 +44,7 @@ export async function callStructured<T>(
   usage: ClaudeUsage,
 ): Promise<StructuredResult<T>> {
   usage.calls++;
+  const started = Date.now();
   let response: Anthropic.Beta.BetaMessage;
   try {
     response = await client.beta.messages.create(
@@ -63,11 +64,18 @@ export async function callStructured<T>(
     );
   } catch (error) {
     usage.failures++;
+    // Et kall som brukte hele tidsgrensen, kan ha gått ut på tid fordi svaret ble langt, og det
+    // gjelder saken. Et tidsavbrudd før det (for eksempel at tilkoblingen ikke kom i stand) er
+    // en nettverksfeil og er forbigående.
+    const slowAnswer =
+      error instanceof Anthropic.APIConnectionTimeoutError &&
+      request.timeoutMs !== undefined &&
+      Date.now() - started >= request.timeoutMs * 0.9;
     return {
       ok: false,
       reason: `feilet: ${describeClaudeError(error)}`,
       fatal: isFatalClaudeError(error),
-      transient: isTransientClaudeError(error),
+      transient: !slowAnswer && isTransientClaudeError(error),
     };
   }
 

@@ -73,7 +73,7 @@ artikkelsidene (`allowFullTextFetch`) kan regnes som skraping, og er derfor slå
 - Saker om temaene i `editorial.sensitiveCategories` krever manuell godkjenning. Privatpersoner navngis aldri
   (`neverNamePrivatePersons: true` kan ikke endres). Påstander om enkeltpersoner krever minst
   `minSourcesForPersonClaims` uavhengige kilder. Håndheves slik: en navngitt privatperson stopper publisering
-  (fanges av skriverens egen liste når navnet står i teksten, og av modereringen når den er sikker; usikre funn
+  (fanges av skriverens egen liste når etternavnet står i teksten, og av modereringen når den er sikker; usikre funn
   flagges for redaktøren). Navn som ikke står i skriverens personliste, flagges. Sensitive temaer flagger alltid
   artikkelen for manuell godkjenning, også når bare modereringen melder dem. Påstander om en person med færre enn
   `minSourcesForPersonClaims` kilder som nevner personen, med ulike utgivere, flagges for redaktøren. Hva en person

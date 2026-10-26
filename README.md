@@ -220,13 +220,14 @@ Etter grupperingen skrives artikler for saker som er klare (`src/lib/generate/`)
    - ordrekker på mer enn `maxCopiedWords` ord som er like en kilde utenfor sitat, og avsnitt der minst halvparten
      av ordrekkene på fire ord er like én kilde (nær-kopi med små endringer)
    - tall som ikke står i kildene, også tall skrevet med ord («tre»), med tusenskille, i millioner (som må ha
-     samme størrelse som i kilden), som datoer og som klokkeslett («kl.», «klokka», «klokken»). Engelske kilder
+     samme størrelse som i kilden, også «fem milliarder»), som datoer og som klokkeslett («kl.», «klokka», «klokken»). Engelske kilder
      leses med engelske tallord, tusenskille og datoer. Datoer godtas dagen før, samme dag og dagen etter at en
      kilde ble publisert, regnet i kalenderdager i norsk tid
-   - kilder som ikke finnes, navngitte privatpersoner (navnet må stå i teksten), navn som ser ut som personer, men
+   - kilder som ikke finnes, navngitte privatpersoner (etternavnet står i teksten, også i genitiv), navn som ser ut
+     som personer, men
      ikke står i personlisten, og påstander om personer med færre enn `minSourcesForPersonClaims` uavhengige kilder
      (kilder som nevner personen, med ulike utgivere)
-   - lenker, HTML, lengde og kildenøkler som står igjen i teksten («ifølge K2»)
+   - lenker, HTML, lengde og kildenøkler som står igjen i teksten etter ord som «ifølge» («ifølge K2»)
 5. **AI-moderering.** Et eget kall med egen prompt (`prompts/article-moderate.md`) sammenligner artikkelen setning
    for setning med kildene og rapporterer udokumenterte påstander, feil gjengivelser (også feil tidsangivelser),
    tall og sitater uten kilde, kopiert tekst, privatpersoner, sensitive temaer, spekulasjon og ubalanse.
@@ -244,17 +245,17 @@ Etter grupperingen skrives artikler for saker som er klare (`src/lib/generate/`)
 
 Feil hos Claude API som ikke gjelder saken, stopper kjøringen: ugyldig nøkkel, manglende tilgang, brukt opp
 kreditt, feil i oppsettet (for eksempel en beta organisasjonen ikke har), overbelastning, for mange kall og
-nettverksfeil. Forsøket telles ikke, saken merkes med feilen og tas sist i neste kjøring, jobben merkes som
-feilet, og cron-ruten svarer 500. Feil som kan gjelde selve saken (avslag, svar som ikke kan tolkes, og svar som
-ikke kom innen tidsgrensen) teller som forsøk. Hvert kall har en tidsgrense på 5 minutter og ett nytt forsøk, og
+nettverksfeil (også at tilkoblingen går ut på tid). Forsøket telles ikke, saken merkes med feilen og tas sist i
+neste kjøring, jobben merkes som feilet, og cron-ruten svarer 500. Feil som kan gjelde selve saken (avslag, svar
+som ikke kan tolkes, og kall som brukte hele tidsgrensen fordi svaret ble langt) teller som forsøk. Hvert kall har en tidsgrense på 5 minutter og ett nytt forsøk, og
 kjøringen starter ikke på nye saker etter 40 minutter, så den blir ferdig lenge før en annen prosess kan regne den
 som avbrutt.
 
 Admin-siden **Godkjenning** viser hver artikkel med funnene gruppert («Hindrer publisering», «Må vurderes», «Til
 orientering»), teksten og kildene. Redaktøren kan godkjenne og publisere, avvise med begrunnelse, eller slette
 utkastet så saken skrives på nytt. «Skriv på nytt» sletter ikke utkastet hvis saken ikke ville blitt skrevet igjen
-(skriving ikke satt opp, for få kilder, eller mindre enn tre timer igjen før aldersgrensen, så neste kjøring rekker
-den). Publiserte artikler kan avpubliseres med begrunnelse; det føres som en ny versjon i endringsloggen. Avviste og
+(skriving ikke satt opp, for få kilder, eller mindre enn tre timer, og høyst halve aldersgrensen, igjen før
+aldersgrensen, så neste kjøring rekker den). Publiserte artikler kan avpubliseres med begrunnelse; det føres som en ny versjon i endringsloggen. Avviste og
 publiserte artikler vises side for side, så alle kan nås, og siden åpnes på samme sted etter en handling. Saker
 der skrivingen feilet, vises med årsak og en knapp for å prøve igjen (for eksempel etter at nøkkelen er rettet).
 Flyttes kildene til en sak med et upublisert utkast (under Saker), slettes utkastet og skrives på nytt.
@@ -264,9 +265,10 @@ lenke og kildeangivelse, «Slik ble saken laget» (modell, om AI-modereringen fa
 godkjente) og endringslogg. Siden har maskinlesbar merking: `<meta name="ai-generated" content="true">` i
 `<head>` for alle, også verktøy uten JavaScript (taggen står i den statiske layouten, `src/app/sak/[slug]/layout.tsx`,
 som React løfter inn i `<head>`), `ai-model` i metadata, og strukturerte data (schema.org `NewsArticle` med `creator`
-som programvare og `isBasedOn` med kildene). Forsiden har samme meta-tagg. Tittel og beskrivelse strømmes som
-vanlig i Next.js, og står i `<head>` for roboter som ikke kjører JavaScript. En sak uten publisert artikkel gir
-siden «fant ikke» med `noindex`.
+som programvare og `isBasedOn` med kildene). Forsiden har samme meta-tagg. Tittel, beskrivelse og `noindex`
+strømmes som vanlig i Next.js for nettlesere, men står i `<head>` med en gang for søkemotorer, forhåndsvisninger,
+KI-crawlere og enkle klienter som curl (`htmlLimitedBots` i `next.config.ts`). En klient uten User-Agent får
+strømmet metadata. En sak uten publisert artikkel gir siden «fant ikke» med `noindex`.
 
 Kontrollene er testet på syntetiske artikler (`tests/fixtures/generated-articles.json`): for tre saker i korpuset
 én god artikkel og fem varianter med hver sin innplantede feil (oppdiktet tall, for langt sitat, oppdiktet sitat,
@@ -403,8 +405,9 @@ aldri mot nettet: innhentingen testes med en falsk `fetch` og syntetiske eksempe
 - artikkelsiden: synlig og maskinlesbar AI-merking (også at meta-taggen står i den statiske layouten), strukturerte
   data, kildene med kreditering uten kildetekst, og
   teksten om hvordan saken ble kontrollert, også når AI-modereringen ikke kunne kjøre
-- brødteksten: avsnitt, mellomtitler, punktlister og nummererte lister (også uten tom linje imellom, og med
-  fortsettelseslinjer), nivå på mellomtitlene, og at HTML
+- brødteksten: avsnitt, mellomtitler, punktlister og nummererte lister (også uten tom linje imellom, med
+  fortsettelseslinjer og startnummer, og at et avsnitt som starter med en dato ikke blir en liste), nivå på
+  mellomtitlene, og at HTML
   vises som tekst
 - hele pipelinen mot en ekte database: synkronisering, innhenting, sletting av utløpt tekst (før grupperingen og
   skrivingen), gruppering, skriving og oppsummeringen, at slettingen kjører selv om et steg feiler, og at en feil i

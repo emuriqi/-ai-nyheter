@@ -6,10 +6,19 @@
 export type Block =
   | { type: "paragraph"; text: string }
   | { type: "heading"; text: string }
-  | { type: "list"; items: string[]; ordered?: boolean };
+  | { type: "list"; items: string[]; ordered?: boolean; start?: number };
 
 const BULLET = /^[-*]\s+(.+)$/;
-const NUMBERED = /^(\d{1,3})[.)]\s+(.+)$/;
+/** Månedsnavn med liten eller stor forbokstav («oktober», «Oktober»). */
+const MONTHS = "januar februar mars april mai juni juli august september oktober november desember"
+  .split(" ")
+  .map((m) => `[${m[0]}${m[0].toUpperCase()}]${m.slice(1)}`)
+  .join("|");
+/**
+ * Et punkt i en nummerert liste: tall, punktum eller parentes, og tekst med stor
+ * forbokstav. «8. oktober ble det kjent …» og «22. juli 2011 …» er datoer, ikke lister.
+ */
+const NUMBERED = new RegExp(String.raw`^(\d{1,3})[.)]\s+(?!(?:${MONTHS})(?![\p{L}]))(\p{Lu}.*)$`, "u");
 
 /**
  * Tolker brødteksten linje for linje, som vanlig Markdown: en mellomtittel
@@ -20,13 +29,20 @@ const NUMBERED = /^(\d{1,3})[.)]\s+(.+)$/;
 export function parseBody(body: string): Block[] {
   const blocks: Block[] = [];
   let paragraph: string[] = [];
-  let list: { ordered: boolean; items: string[] } | null = null;
+  let list: { ordered: boolean; start: number; items: string[] } | null = null;
   const endParagraph = () => {
     if (paragraph.length > 0) blocks.push({ type: "paragraph", text: inline(paragraph.join(" ")) });
     paragraph = [];
   };
   const endList = () => {
-    if (list) blocks.push({ type: "list", items: list.items.map(inline), ...(list.ordered ? { ordered: true } : {}) });
+    if (list) {
+      const items = list.items.map(inline);
+      blocks.push(
+        list.ordered
+          ? { type: "list", items, ordered: true, ...(list.start !== 1 ? { start: list.start } : {}) }
+          : { type: "list", items },
+      );
+    }
     list = null;
   };
 
@@ -46,7 +62,7 @@ export function parseBody(body: string): Block[] {
       const item = bullet ? bullet[1] : numbered![2];
       endParagraph();
       if (list && list.ordered !== ordered) endList();
-      list ??= { ordered, items: [] };
+      list ??= { ordered, start: ordered ? Number(numbered![1]) : 1, items: [] };
       list.items.push(item);
     } else if (list) {
       // Fortsettelsen av et listepunkt.

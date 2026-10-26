@@ -59,6 +59,27 @@ describe("brødtekst i Markdown", () => {
     ]);
   });
 
+  it("lar et avsnitt som starter med en dato, være et avsnitt", () => {
+    expect(
+      parseBody(
+        "Innledning.\n\n8. oktober ble det kjent.\nFylket ba om mer.\n\n## Bakgrunn\n22. juli 2011 skjedde det.",
+      ),
+    ).toEqual([
+      { type: "paragraph", text: "Innledning." },
+      { type: "paragraph", text: "8. oktober ble det kjent. Fylket ba om mer." },
+      { type: "heading", text: "Bakgrunn" },
+      { type: "paragraph", text: "22. juli 2011 skjedde det." },
+    ]);
+    expect(parseBody("8. Oktober ble det kjent.")).toEqual([{ type: "paragraph", text: "8. Oktober ble det kjent." }]);
+  });
+
+  it("beholder nummeret en liste starter på", () => {
+    expect(parseBody("3. Tredje\n4. Fjerde")).toEqual([
+      { type: "list", ordered: true, start: 3, items: ["Tredje", "Fjerde"] },
+    ]);
+    expect(renderToStaticMarkup(createElement(ArticleBody, { body: "3. Tredje" }))).toContain('<ol start="3"');
+  });
+
   it("viser nummererte lister som <ol>", () => {
     expect(renderToStaticMarkup(createElement(ArticleBody, { body: "1. Én\n2. To" }))).toContain(
       '<ol class="list-decimal space-y-1 pl-6"><li>Én</li><li>To</li></ol>',

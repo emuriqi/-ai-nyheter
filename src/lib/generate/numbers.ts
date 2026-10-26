@@ -150,12 +150,16 @@ const NORWEGIAN = new Set(["nb", "nn", "no"]);
  * Et tall som tekst, normalisert: «20 000» blir 20000, «3.250» blir 3250 og
  * «4,60» blir 4.6. I engelsk tekst er «4,600» tusenskille (4600).
  */
-function canonical(raw: string, english: boolean): number {
-  const compact = raw.replace(/[\s  ]/g, "");
-  if (/^\d{1,3}(?:\.\d{3})+$/.test(compact) && !english) return Number(compact.replace(/\./g, ""));
-  if (/^\d{1,3}(?:,\d{3})+$/.test(compact) && english) return Number(compact.replace(/,/g, ""));
-  if (english) return Number(compact.replace(/,/g, ""));
-  return Number(compact.replace(",", "."));
+function canonical(raw: string, english: boolean): string {
+  const compact = raw.replace(/[\s\u00A0\u202F]/g, "");
+  let value: number;
+  if (/^\d{1,3}(?:\.\d{3})+$/.test(compact) && !english) value = Number(compact.replace(/\./g, ""));
+  // Flere komma («2,300,000») er tusenskille også i norsk tekst; ett komma er desimaltegn.
+  else if (/^\d{1,3}(?:,\d{3}){2,}$/.test(compact) || (english && /^\d{1,3}(?:,\d{3})+$/.test(compact))) {
+    value = Number(compact.replace(/,/g, ""));
+  } else value = Number(english ? compact.replace(/,/g, "") : compact.replace(",", "."));
+  // Ukjente skrivemåter sammenlignes som de står, så to ulike tall aldri blir like.
+  return Number.isFinite(value) ? String(value) : compact;
 }
 
 const dateKey = (day: number, month: number) => `dato:${day}.${month}`;
@@ -208,8 +212,9 @@ export function numberMentions(input: string, from: TextRole = { role: "artikkel
   take(DATE_SHORT, (m) => {
     const [day, month] = [Number(m[1]), Number(m[2])];
     // «14.11.» er en dato uten år, et desimaltall på slutten av en setning, eller et klokkeslett.
-    const keys = [`tall:${Number(`${m[1]}.${m[2]}`)}`];
-    if (validDate(day, month)) keys.unshift(dateKey(day, month));
+    // I artikkelen er en gyldig dato bare en dato; i kildene godtas også desimaltallet.
+    const keys = validDate(day, month) ? [dateKey(day, month)] : [];
+    if (!validDate(day, month) || from.role === "kilde") keys.push(`tall:${Number(`${m[1]}.${m[2]}`)}`);
     if (day < 24 && month < 60 && m[2].length === 2) keys.push(`klokkeslett:${day}:${m[2]}`);
     return [{ kind: validDate(day, month) ? "dato" : "tall", keys, excerpt: m[0] }];
   });
@@ -221,10 +226,25 @@ export function numberMentions(input: string, from: TextRole = { role: "artikkel
     const scale = /^milliard|^billion/i.test(m[1]) ? 1e9 : 1e6;
     return [{ kind: "tall", keys: [`tall:${scale}`], excerpt: m[0].trim() }];
   });
+  const scaleWords = norwegian ? NUMBER_WORDS : english ? ENGLISH_NUMBER_WORDS : null;
+  if (scaleWords) {
+    // Tallord med skalaord: «fem milliarder», «three million».
+    const wordScale = new RegExp(
+      String.raw`(?<![\p{L}])(${Object.keys(scaleWords).join("|")})\s+(${SCALE_WORDS})(?![\p{L}])`,
+      "giu",
+    );
+    take(wordScale, (m) => {
+      const value = scaleWords[m[1].toLowerCase()];
+      const scale = SCALES.find(([re]) => re.test(m[2].toLowerCase()))?.[1] ?? 1;
+      const scaled = `tall:${Math.round(value * scale)}`;
+      const keys = from.role === "artikkel" ? [scaled] : [`tall:${value}`, scaled];
+      return [{ kind: "tall", keys, excerpt: m[0].trim() }];
+    });
+  }
   take(NUMBER, (m) => {
     const value = canonical(m[1], english);
     const scale = m[2] ? SCALES.find(([re]) => re.test(m[2].toLowerCase()))?.[1] : undefined;
-    const scaled = scale ? `tall:${Math.round(value * scale)}` : null;
+    const scaled = scale && /^[\d.]+$/.test(value) ? `tall:${Math.round(Number(value) * scale)}` : null;
     // I artikkelen teller bare tallet med riktig størrelse. I kildene er begge kjent.
     const keys = scaled && from.role === "artikkel" ? [scaled] : [`tall:${value}`, ...(scaled ? [scaled] : [])];
     // «10.15» uten «kl.» kan være et klokkeslett.
@@ -246,8 +266,7 @@ export function numberMentions(input: string, from: TextRole = { role: "artikkel
           .match(/(\p{L}+)\s*$/u)?.[1]
           ?.toLowerCase();
         const after = text.slice((m.index ?? 0) + m[0].length);
-        if (/^\s+i\s+kraft(?![\p{L}])/iu.test(after) || before === "et" || before === "det" || before === "ett")
-          continue;
+        if (/^\s+i\s+kraft(?![\p{L}])/iu.test(after) || before === "et" || before === "ett") continue;
       }
       found.push({ kind: "tall", keys: [`tall:${value}`], excerpt: m[0] });
     }

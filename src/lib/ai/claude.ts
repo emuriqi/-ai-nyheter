@@ -51,14 +51,14 @@ export function isFatalClaudeError(error: unknown): boolean {
 /**
  * Forbigående feil hos API-et eller i nettverket: tidsavbrudd i køen (408),
  * konflikt (409), for mange kall (429), serverfeil og overbelastning (5xx) og
- * tilkoblingsfeil. De sier ingenting om selve forespørselen.
+ * tilkoblingsfeil, også tidsavbrudd i tilkoblingen. De sier ingenting om selve
+ * forespørselen.
  *
- * Unntak: at svaret ikke kom innen tidsgrensen (hos oss eller hos API-et, 504),
- * kan skyldes forespørselen selv (et langt svar), og regnes derfor ikke som
- * forbigående. Det telles som et forsøk for saken.
+ * Unntak: når API-et selv melder tidsavbrudd under behandlingen (504), kan det
+ * skyldes forespørselen (et langt svar), og det telles som et forsøk for saken.
+ * Det samme gjør callStructured når et kall har brukt hele tidsgrensen.
  */
 export function isTransientClaudeError(error: unknown): boolean {
-  if (error instanceof Anthropic.APIConnectionTimeoutError) return false;
   if (error instanceof Anthropic.APIConnectionError) return true;
   if (!(error instanceof Anthropic.APIError)) return false;
   const status = error.status ?? 0;

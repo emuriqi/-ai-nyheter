@@ -271,8 +271,10 @@ export async function whyNotWritten(
   canWrite = hasClaudeKey(),
 ): Promise<NotWrittenReason | null> {
   if (!generationEnabled(config) || !canWrite) return "skriving-av";
-  // Saken og kildene må fortsatt kunne brukes når neste kjøring kommer.
-  const next = new Date(now.getTime() + REWRITE_MARGIN_MS);
+  // Saken og kildene må fortsatt kunne brukes når neste kjøring kommer. Med en kort aldersgrense
+  // brukes høyst halvparten av den som margin, så nye saker fortsatt kan skrives på nytt.
+  const margin = Math.min(REWRITE_MARGIN_MS, (config.generation.maxStoryAgeHours * 3600_000) / 2);
+  const next = new Date(now.getTime() + margin);
   const story = await db.story.findUnique({
     where: { id: storyId },
     select: { firstSeenAt: true, _count: { select: { items: { where: usableSources(next) } } } },
@@ -352,7 +354,10 @@ async function generate(
     }
 
     // Kildehenvisninger som [K1] fjernes før kontrollene, så leserne aldri ser dem.
-    const { article, findings: refFindings } = stripSourceRefs(written.article);
+    const { article, findings: refFindings } = stripSourceRefs(
+      written.article,
+      sources.map((s) => s.key),
+    );
     const checks = [...refFindings, ...checkArticle(article, sources, config.editorial)];
     const moderation = await moderator.moderate(sources, article, now);
     if (!moderation.ok && moderation.stopRun) {
