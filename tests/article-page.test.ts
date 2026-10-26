@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import ArticleLayout from "@/app/sak/[slug]/layout";
 import { generateMetadata } from "@/app/sak/[slug]/page";
 import { ArticleView } from "@/components/article-view";
 import { emptyUsage } from "@/lib/ai/claude";
@@ -115,12 +116,17 @@ describe("artikkelsiden", () => {
     expect(html).toContain("godkjent av redaktøren");
   });
 
-  it("har maskinlesbar AI-merking i metadata, og noindex for saker som ikke finnes", async () => {
+  it("har maskinlesbar AI-merking i den statiske layouten, så den alltid står i <head>", () => {
+    const html = renderToStaticMarkup(createElement(ArticleLayout, { children: "innhold" } as never));
+    expect(html).toContain('<meta name="ai-generated" content="true"/>');
+  });
+
+  it("har modellen i metadata, og noindex for saker som ikke finnes", async () => {
     await publish(moderated);
     expect(await generateMetadata(params("flom-i-agder"))).toMatchObject({
       title: regn.good.tittel,
       description: regn.good.ingress,
-      other: { "ai-generated": "true", "ai-model": "claude-test" },
+      other: { "ai-model": "claude-test" },
     });
     expect(await generateMetadata(params("finnes-ikke"))).toEqual({
       title: "Fant ikke saken",

@@ -271,6 +271,28 @@ describe("runGenerateJob", () => {
     expect(pipelineFailed({ cluster: { status: "skipped", reason: "" }, generate: result })).toBe(true);
   });
 
+  it("merker saken som stoppet kjøringen, og tar den sist i neste kjøring", async () => {
+    const fugl = await addStory("fugl-rogaland");
+    const order: string[] = [];
+    const a = agents(async (sources) => {
+      const item = await db.sourceItem.findUniqueOrThrow({ where: { id: sources[0].itemId } });
+      order.push(item.storyId === storyId ? "regn" : "fugl");
+      if (item.storyId === storyId)
+        return { ok: false, reason: "Skriving feilet: InternalServerError (529)", stopRun: true };
+      return { ok: true, article: regn.good };
+    });
+    expect((await run(config(), a)).status).toBe("stopped");
+    expect(await db.story.findUniqueOrThrow({ where: { id: storyId } })).toMatchObject({
+      generationAttempts: 0,
+      lastGenerationAt: NOW,
+      lastGenerationError: "Skriving feilet: InternalServerError (529)",
+    });
+    // Neste kjøring tar saken som ikke er forsøkt, først.
+    await run(config(), a);
+    expect(order).toEqual(["regn", "fugl", "regn"]);
+    expect(await db.article.count({ where: { storyId: fugl } })).toBe(1);
+  });
+
   it("lagrer ingenting når modereringen stopper av en feil hos API-et", async () => {
     const result = await run(
       config(),
@@ -410,6 +432,15 @@ describe("runGenerateJob", () => {
       });
       expect(await findCandidates(db, config({ settleMinutes: 30 }), NOW)).toHaveLength(0);
       expect(await findCandidates(db, config({ settleMinutes: 5 }), NOW)).toHaveLength(1);
+    });
+
+    it("sender ikke tekst som utløper før skrivingen og modereringen er ferdig", async () => {
+      await db.sourceItem.updateMany({
+        where: { storyId, guid: "byraa-02" },
+        data: { deleteAfter: new Date(NOW.getTime() + 10 * 60_000) },
+      });
+      const [candidate] = await findCandidates(db, config(), NOW);
+      expect(candidate.items).toHaveLength(3);
     });
 
     it("sender ikke tekst som har passert sletteperioden", async () => {

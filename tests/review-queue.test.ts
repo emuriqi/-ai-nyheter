@@ -59,6 +59,13 @@ describe("getReviewQueue", () => {
     expect(second.pages.published).toEqual({ page: 2, more: false, total });
   });
 
+  it("viser siste side når sidetallet er for høyt", async () => {
+    const queue = await getReviewQueue({ publishedPage: 99, rejectedPage: 5 });
+    expect(queue.pages.published).toEqual({ page: 2, more: false, total });
+    expect(queue.published).toHaveLength(5);
+    expect(queue.pages.rejected).toEqual({ page: 1, more: false, total: 0 });
+  });
+
   it("leser sidetallet fra adressen og faller tilbake til første side", () => {
     expect(pageNumber("2")).toBe(2);
     for (const value of [undefined, "", "0", "-1", "1.5", "abc", "99999", ["2"]]) expect(pageNumber(value)).toBe(1);

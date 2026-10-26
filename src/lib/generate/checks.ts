@@ -49,6 +49,7 @@ const NORWEGIAN = new Set(["nb", "nn", "no"]);
 /** Der et sitat er forkortet med (…) eller […], eller har et innskudd i klammer. */
 const QUOTE_BREAK = /\[[^\]]*\]|\(\s*(?:…|\.\.\.)\s*\)|…|\.\.\./u;
 const INSERTION = /\[(?!\s*(?:…|\.\.\.)\s*\])[^\]]*\]/u;
+const OMISSION = /[[(]\s*(?:…|\.\.\.)\s*[\])]|…|\.\.\./u;
 
 /** Delene av et sitat som skal stå ordrett i kilden: alt utenom utelatelser og innskudd. */
 function quoteSegments(quote: Quote): string[] {
@@ -106,13 +107,17 @@ function checkQuotes(quotes: Quote[], sources: PreparedSource[], editorial: Edit
     } else {
       add("sitat_ikke_i_kilde", "blokkerer", "Sitatet står ikke ordrett i noen kilde.", quote.text);
     }
+    // Utelatelser og innskudd er vanlig presseskikk, men kan endre meningen. Redaktøren vurderer.
     if (quote.parts.some((p) => INSERTION.test(p))) {
       add(
         "sitat_med_innskudd",
-        "lav",
+        "middels",
         "Sitatet har et innskudd i klammer. Sjekk at det ikke endrer meningen.",
         quote.text,
       );
+    }
+    if (quote.parts.some((p) => OMISSION.test(p))) {
+      add("sitat_forkortet", "middels", "Sitatet er forkortet. Sjekk at utelatelsen ikke endrer meningen.", quote.text);
     }
     if (quote.unclosed) {
       add(
@@ -156,11 +161,15 @@ const NEAR_COPY_MIN_WORDS = 15;
  */
 function checkCopiedText(fieldsWithoutQuotes: string[], sources: PreparedSource[], maxCopiedWords: number): Finding[] {
   const n = maxCopiedWords + 1;
-  const grams = new Map<string, string>();
+  // Alle kildene som har ordrekken, så resultatet ikke avhenger av kildenes rekkefølge.
+  const grams = new Map<string, Set<string>>();
   const sourceTitles = new Map<string, string>();
   const shortGrams = sources.map((source) => {
     const w = words(`${source.title}\n${source.text}`);
-    for (let i = 0; i + n <= w.length; i++) grams.set(w.slice(i, i + n).join(" "), source.key);
+    for (let i = 0; i + n <= w.length; i++) {
+      const gram = w.slice(i, i + n).join(" ");
+      grams.set(gram, (grams.get(gram) ?? new Set()).add(source.key));
+    }
     sourceTitles.set(source.key, normalizeForMatch(source.title));
     const set = new Set<string>();
     for (let i = 0; i + NEAR_COPY_N <= w.length; i++) set.add(w.slice(i, i + NEAR_COPY_N).join(" "));
@@ -175,11 +184,12 @@ function checkCopiedText(fieldsWithoutQuotes: string[], sources: PreparedSource[
     let exact = false;
     let i = 0;
     while (i + n <= w.length) {
-      const key = grams.get(w.slice(i, i + n).join(" "));
-      if (!key) {
+      const keys = grams.get(w.slice(i, i + n).join(" "));
+      if (!keys) {
         i++;
         continue;
       }
+      const key = [...keys].sort()[0];
       // Utvid treffet så langt det går, og rapporter hele ordrekken én gang.
       let end = i + n;
       while (end < w.length && grams.has(w.slice(end - n + 1, end + 1).join(" "))) end++;
@@ -187,7 +197,7 @@ function checkCopiedText(fieldsWithoutQuotes: string[], sources: PreparedSource[
       const excerpt = w.slice(i, end).join(" ");
       // Navn, tall og kildens egen tittel kan ofte ikke sies med andre ord. Det vurderer redaktøren.
       const names = run.filter((x) => /^[\p{Lu}\p{N}]/u.test(x.raw)).length / run.length >= 0.7;
-      const title = sourceTitles.get(key)?.includes(` ${excerpt} `) ?? false;
+      const title = [...keys].some((k) => sourceTitles.get(k)?.includes(` ${excerpt} `));
       findings.push({
         origin: "kontroll",
         kind: "kopiert_tekst",
@@ -249,23 +259,48 @@ function checkSourceKeys(article: WrittenArticle, sources: PreparedSource[]): Fi
   return findings;
 }
 
-/** Ordene i et navn som har stor forbokstav, for eksempel «Ola» og «Hansen» i «hydrolog Ola Hansen». */
+/** Ord som beskriver en person uten å være navn, også med stor forbokstav («Mann i 40-årene»). */
+const DESCRIPTORS = new Set(
+  (
+    "en ei et ett mann kvinne dame herre gutt jente barn ungdom person personer sjåfør fører passasjer syklist " +
+    "fotgjenger beboer nabo pasient elev student ansatt eier far mor sønn datter bror søster"
+  ).split(" "),
+);
+
+/**
+ * Ordene i et navn: de med stor forbokstav, uten det som står i parentes
+ * («(Ap)») eller etter komma («, Vennesla»), og uten ord som bare beskriver
+ * personen. «Ola» og «Hansen» i «hydrolog Ola Hansen (Ap)».
+ */
 function nameWords(name: string): string[] {
-  return tokens(name)
-    .filter((t) => /^\p{Lu}/u.test(t.raw))
-    .map((t) => t.norm);
+  const core = name.replace(/\([^)]*\)/g, " ").split(",")[0];
+  return tokens(core)
+    .filter((t) => /^\p{Lu}\p{Ll}/u.test(t.raw) && !DESCRIPTORS.has(t.norm))
+    .map((t) => t.raw);
+}
+
+/** Ordene i en tekst slik de står, også uten genitiv-s («Nilsens» gir også «Nilsen»). */
+function wordForms(text: string, lowercase: boolean): Set<string> {
+  const forms = new Set<string>();
+  for (const t of tokens(text)) {
+    const word = lowercase ? t.norm : t.raw;
+    forms.add(word);
+    if (/s$/i.test(word)) forms.add(word.slice(0, -1));
+  }
+  return forms;
 }
 
 function checkPersons(article: WrittenArticle, text: string, sources: PreparedSource[], minSources: number): Finding[] {
-  const articleWords = new Set(words(text));
-  const sourceWords = new Map(sources.map((s) => [s.key, new Set(words(`${s.title}\n${s.text}`))]));
+  // Navn sammenlignes med stor forbokstav i artikkelen, så «mann» ikke regnes som navnet «Mann».
+  const articleWords = wordForms(text, false);
+  const sourceWords = new Map(sources.map((s) => [s.key, wordForms(`${s.title}\n${s.text}`, true)]));
   const publisherOf = new Map(sources.map((s) => [s.key, s.publisher]));
 
   return article.personer.flatMap((person): Finding[] => {
     const name = nameWords(person.navn);
-    const inText = name.length > 0 && name.every((w) => articleWords.has(w));
     if (person.rolle === "privatperson") {
-      if (inText) {
+      // Ett navneord i teksten er nok: fornavn, etternavn eller navnet i genitiv.
+      if (name.some((w) => articleWords.has(w))) {
         return [
           {
             origin: "skriver",
@@ -289,9 +324,10 @@ function checkPersons(article: WrittenArticle, text: string, sources: PreparedSo
     }
     // Utsagn personen gir i sin rolle, er ikke påstander om personen.
     if (person.omtale !== "påstand_om_personen") return [];
-    // Bare kilder som faktisk nevner personen, og bare én per utgiver.
-    const surname = name.at(-1);
-    const mentioning = person.kilder.filter((k) => surname && sourceWords.get(k)?.has(surname));
+    // Bare kilder som faktisk nevner personen ved navn (alle navneordene), og bare én per utgiver.
+    const mentioning = person.kilder.filter(
+      (k) => name.length > 0 && name.every((w) => sourceWords.get(k)?.has(w.toLowerCase())),
+    );
     const publishers = new Set(mentioning.map((k) => publisherOf.get(k)));
     if (publishers.size < minSources) {
       return [
@@ -317,8 +353,23 @@ const SENTENCE_STARTERS = new Set(
   ).split(" "),
 );
 
-/** Navn på institusjoner som starter med et ord i genitiv, som «Norges Bank». */
-const INSTITUTION_PREFIXES = new Set(["norges", "statens"]);
+/**
+ * Første ord i vanlige navn på institusjoner, organisasjoner og områder som
+ * ikke er personer: «Norges Bank», «Helse Sør-Øst», «Nordre Follo», «Røde Kors».
+ */
+const INSTITUTION_PREFIXES = new Set(
+  (
+    "norges statens helse nordre søndre indre ytre øvre nedre vestre østre midtre store lille nye gamle norsk " +
+    "norske røde den det de oslo bergen"
+  ).split(" "),
+);
+
+/** Ord som viser at navnet er en organisasjon eller et sted: «Norsk Folkehjelp», «Oslo Børs». */
+const INSTITUTION_WORDS = new Set(
+  "kors folkehjelp børs bank universitet høgskole sykehus kommune fylkeskommune energi kraft nett holding group".split(
+    " ",
+  ),
+);
 
 /**
  * Ser etter navn som ikke står i personlisten: to eller flere ord på rad med
@@ -326,14 +377,16 @@ const INSTITUTION_PREFIXES = new Set(["norges", "statens"]);
  * den navngir, så et slikt funn kan være en privatperson som er oversett.
  */
 function checkUnlistedNames(fields: string[], article: WrittenArticle): Finding[] {
-  const listed = new Set(article.personer.flatMap((p) => nameWords(p.navn)));
+  const listed = new Set(article.personer.flatMap((p) => nameWords(p.navn).map((w) => w.toLowerCase())));
   const found = new Set<string>();
   for (const field of fields) {
     for (const sentence of cleanText(field).split(/[.!?:;«»“”"–—\n()]+/)) {
       const run: string[] = [];
       const flush = () => {
-        const institution = INSTITUTION_PREFIXES.has(run[0]?.toLowerCase());
-        if (run.length >= 2 && !institution && !run.some((w) => listed.has(w.toLowerCase()))) found.add(run.join(" "));
+        const lower = run.map((w) => w.toLowerCase());
+        const institution = INSTITUTION_PREFIXES.has(lower[0]) || lower.some((w) => INSTITUTION_WORDS.has(w));
+        const isListed = lower.some((w) => listed.has(w) || listed.has(w.replace(/s$/, "")));
+        if (run.length >= 2 && !institution && !isListed) found.add(run.join(" "));
         run.length = 0;
       };
       const parts = sentence.split(/(\s+)/).filter((p) => p.trim() !== "");
@@ -376,7 +429,10 @@ function checkForm(article: WrittenArticle, text: string): Finding[] {
   return findings;
 }
 
-const SOURCE_REF = /\s?(?:\[|\()K\d+(?:\s*[,;/]\s*K\d+)*(?:\]|\))/g;
+/** Kildehenvisninger i parentes eller klammer: [K1], (K1, K2), [K1–K3], (K1 og K2), (kilde: K1). */
+const SOURCE_REF = /\s?[[(](?:kilder?:\s*)?K\d+(?:\s*(?:[,;/–-]|og)\s*K\d+)*[\])]/gi;
+/** En kildenøkkel som står igjen i teksten, som i «ifølge K2». */
+const BARE_KEY = /(?<![\p{L}\p{N}])K\d{1,2}(?![\p{L}\p{N}])/u;
 
 /**
  * Fjerner kildehenvisninger som [K1] fra teksten. De er interne nøkler og
@@ -384,23 +440,36 @@ const SOURCE_REF = /\s?(?:\[|\()K\d+(?:\s*[,;/]\s*K\d+)*(?:\]|\))/g;
  */
 export function stripSourceRefs(article: WrittenArticle): { article: WrittenArticle; findings: Finding[] } {
   const found = [article.tittel, article.ingress, article.brodtekst].flatMap((t) => t.match(SOURCE_REF) ?? []);
-  if (found.length === 0) return { article, findings: [] };
   const strip = (t: string) => t.replace(SOURCE_REF, "");
-  return {
-    article: {
-      ...article,
-      tittel: strip(article.tittel),
-      ingress: strip(article.ingress),
-      brodtekst: strip(article.brodtekst),
-    },
-    findings: [
-      {
-        origin: "kontroll",
-        kind: "kildehenvisning_i_teksten",
-        severity: "lav",
-        message: `Kildehenvisninger som ${found[0].trim()} er fjernet fra teksten. De vises ikke for lesere.`,
-        excerpt: found[0].trim(),
-      },
-    ],
-  };
+  const cleaned =
+    found.length === 0
+      ? article
+      : {
+          ...article,
+          tittel: strip(article.tittel),
+          ingress: strip(article.ingress),
+          brodtekst: strip(article.brodtekst),
+        };
+  const findings: Finding[] = [];
+  if (found.length > 0) {
+    findings.push({
+      origin: "kontroll",
+      kind: "kildehenvisning_i_teksten",
+      severity: "lav",
+      message: `Kildehenvisninger som ${found[0].trim()} er fjernet fra teksten. De vises ikke for lesere.`,
+      excerpt: found[0].trim(),
+    });
+  }
+  // Står en nøkkel igjen i løpende tekst, kan den ikke fjernes uten å ødelegge setningen.
+  const bare = [cleaned.tittel, cleaned.ingress, cleaned.brodtekst].join("\n").match(BARE_KEY);
+  if (bare) {
+    findings.push({
+      origin: "kontroll",
+      kind: "kildehenvisning_i_teksten",
+      severity: "middels",
+      message: `Teksten viser til «${bare[0]}», en intern kildenøkkel som ikke betyr noe for leserne.`,
+      excerpt: bare[0],
+    });
+  }
+  return { article: cleaned, findings };
 }

@@ -20,7 +20,7 @@ export const REVIEW_MESSAGES = {
   "skriving-av":
     "Skriving er ikke satt opp (slått av i konfigurasjonen, eller ANTHROPIC_API_KEY mangler), så saken ville ikke blitt skrevet. Ingenting er endret.",
   "for-gammel":
-    "Saken er eldre enn grensen for nye artikler (maxStoryAgeHours), så den ville ikke blitt skrevet på nytt. Ingenting er endret; avvis artikkelen i stedet.",
+    "Saken er eldre enn grensen for nye artikler (maxStoryAgeHours), så den ville ikke blitt skrevet på nytt. Ingenting er endret.",
   "for-faa-kilder":
     "Saken har for få kilder med tekst som kan brukes, så den ville ikke blitt skrevet på nytt. Ingenting er endret.",
   "ukjent-sak": "Fant ikke saken.",
@@ -172,7 +172,7 @@ export async function regenerateArticle(db: Db, articleId: string, options: Rewr
     if (deleted.count === 0) return false;
     await tx.story.update({
       where: { id: article.storyId },
-      data: { generationAttempts: 0, lastGenerationError: null },
+      data: { generationAttempts: 0, lastGenerationError: null, lastGenerationAt: null },
     });
     return true;
   });
@@ -192,7 +192,7 @@ export async function retryStory(db: Db, storyId: string, options: RewriteOption
   if (notWritten) throw new ReviewError(notWritten);
   const updated = await db.story.updateMany({
     where: { id: storyId, article: null },
-    data: { generationAttempts: 0, lastGenerationError: null },
+    data: { generationAttempts: 0, lastGenerationError: null, lastGenerationAt: null },
   });
   if (updated.count === 0) throw new ReviewError("har-artikkel");
 }

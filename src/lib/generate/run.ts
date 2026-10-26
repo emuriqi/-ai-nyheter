@@ -6,7 +6,14 @@ import type { Db } from "../db";
 import { truncate } from "../ingest/text";
 import { failStaleJobRuns, STALE_JOB_MS } from "../retention";
 import { checkArticle, stripSourceRefs } from "./checks";
-import { type ArticleModerator, type ArticleWriter, createClaudeModerator, createClaudeWriter } from "./claude";
+import {
+  type ArticleModerator,
+  type ArticleWriter,
+  createClaudeModerator,
+  createClaudeWriter,
+  MAX_RETRIES,
+  TIMEOUT_MS,
+} from "./claude";
 import { type Decision, decide } from "./decide";
 import type { WrittenArticle } from "./schema";
 import { type PreparedSource, prepareSources } from "./sources";
@@ -179,6 +186,18 @@ const sourceSelect = {
   source: { select: { name: true, publisher: true } },
 } as const;
 
+/**
+ * Så lenge kan det ta fra kildene leses til artikkelen er skrevet og
+ * moderert: to kall med tidsgrense og nye forsøk. Tekst som utløper innen da,
+ * brukes ikke, så den ikke sendes til Claude etter sletteperioden.
+ */
+const SOURCE_MARGIN_MS = 2 * TIMEOUT_MS * (MAX_RETRIES + 1);
+
+/** Tekst som fortsatt kan brukes når artikkelen er ferdig skrevet og moderert. */
+function usableSources(at: Date) {
+  return analyzableItemAt(new Date(at.getTime() + SOURCE_MARGIN_MS));
+}
+
 /** Vilkårene for at en sak er klar for en første artikkel. */
 function candidateWhere(config: SiteConfig, now: Date): Prisma.StoryWhereInput {
   const g = config.generation;
@@ -190,7 +209,7 @@ function candidateWhere(config: SiteConfig, now: Date): Prisma.StoryWhereInput {
     // Vent til saken har vært stille en stund, så kilder som kommer samtidig, kommer med.
     // Både kildenes tid og når de ble lagt i saken teller: en kilde kan hentes lenge etter at den ble publisert.
     lastSourceAt: { lte: settled },
-    items: { some: analyzableItemAt(now), none: { clusteredAt: { gt: settled } } },
+    items: { some: usableSources(now), none: { clusteredAt: { gt: settled } } },
   };
 }
 
@@ -199,15 +218,19 @@ function candidateSelect(now: Date) {
     id: true,
     slug: true,
     generationAttempts: true,
-    items: { where: analyzableItemAt(now), select: sourceSelect },
+    items: { where: usableSources(now), select: sourceSelect },
   } as const;
 }
 
-/** Saker som er klare for en første artikkel. */
+/**
+ * Saker som er klare for en første artikkel. Saker som ikke er forsøkt før,
+ * kommer først, så en sak som feiler, ikke stenger for de andre. Deretter de
+ * med nyest kilde.
+ */
 export async function findCandidates(db: Db, config: SiteConfig, now: Date) {
   const stories = await db.story.findMany({
     where: candidateWhere(config, now),
-    orderBy: { lastSourceAt: "desc" },
+    orderBy: [{ lastGenerationAt: { sort: "asc", nulls: "first" } }, { lastSourceAt: "desc" }],
     select: candidateSelect(now),
   });
   return stories
@@ -215,14 +238,22 @@ export async function findCandidates(db: Db, config: SiteConfig, now: Date) {
     .slice(0, config.generation.maxArticlesPerRun);
 }
 
-/** Saken med kildene slik de er nå, hvis den fortsatt er klar for en artikkel. */
-async function reloadCandidate(db: Db, config: SiteConfig, storyId: string, now: Date) {
+/** Saken med kildene slik de er nå (`at`), hvis den fortsatt er klar for en artikkel. */
+async function reloadCandidate(db: Db, config: SiteConfig, storyId: string, at: Date) {
   const story = await db.story.findFirst({
-    where: { ...candidateWhere(config, now), id: storyId },
-    select: candidateSelect(now),
+    where: { ...candidateWhere(config, at), id: storyId },
+    select: candidateSelect(at),
   });
   return story && story.items.length >= config.generation.minSourcesPerStory ? story : null;
 }
+
+/**
+ * Hvor lenge en sak må ha igjen før aldersgrensen for at «Skriv på nytt» og
+ * «Prøv igjen» skal godtas. Neste kjøring må rekke den, og hvor ofte
+ * pipelinen kjører, bestemmes av cron, ikke av koden. Tre timer dekker vanlige
+ * oppsett (for eksempel hver halvtime eller hver time).
+ */
+export const REWRITE_MARGIN_MS = 3 * 3600_000;
 
 /** Hvorfor en sak ikke vil få en ny artikkel ved neste kjøring, eller null hvis den vil. */
 export type NotWrittenReason = "skriving-av" | "for-gammel" | "for-faa-kilder" | "ukjent-sak";
@@ -240,15 +271,14 @@ export async function whyNotWritten(
   canWrite = hasClaudeKey(),
 ): Promise<NotWrittenReason | null> {
   if (!generationEnabled(config) || !canWrite) return "skriving-av";
+  // Saken og kildene må fortsatt kunne brukes når neste kjøring kommer.
+  const next = new Date(now.getTime() + REWRITE_MARGIN_MS);
   const story = await db.story.findUnique({
     where: { id: storyId },
-    select: { firstSeenAt: true, _count: { select: { items: { where: analyzableItemAt(now) } } } },
+    select: { firstSeenAt: true, _count: { select: { items: { where: usableSources(next) } } } },
   });
   if (!story) return "ukjent-sak";
-  // Saken må fortsatt være ung nok når neste kjøring kommer. Innhentingen kjører
-  // høyst så ofte som minIntervalMinutes, så to intervaller gir god margin.
-  const margin = 2 * config.ingestion.minIntervalMinutes * 60_000;
-  if (story.firstSeenAt.getTime() < now.getTime() - config.generation.maxStoryAgeHours * 3600_000 + margin) {
+  if (story.firstSeenAt.getTime() < next.getTime() - config.generation.maxStoryAgeHours * 3600_000) {
     return "for-gammel";
   }
   if (story._count.items < config.generation.minSourcesPerStory) return "for-faa-kilder";
@@ -285,16 +315,26 @@ async function generate(
       stats.stopped = DEADLINE_REASON;
       break;
     }
-    // Les kildene på nytt: de kan ha blitt flyttet mens tidligere saker ble skrevet.
-    const story = await reloadCandidate(db, config, candidate.id, now);
+    // Les kildene på nytt: de kan ha blitt flyttet mens tidligere saker ble skrevet, og tekst kan ha utløpt.
+    // `at` er nå, regnet fra starttidspunktet, så testene kan bruke et fast tidspunkt.
+    const at = new Date(now.getTime() + (Date.now() - started));
+    const story = await reloadCandidate(db, config, candidate.id, at);
     if (!story) continue;
     stats.considered++;
     const sources = prepareSources(story.items, config.generation);
+    // Feil som gjelder API-et eller nøkkelen, ikke saken: kjøringen stopper og forsøket telles ikke.
+    // Saken merkes med feilen og havner bakerst i køen, så den ikke stenger for andre saker.
+    const stop = async (reason: string) => {
+      stats.stopped = reason;
+      await db.story.updateMany({
+        where: { id: story.id },
+        data: { lastGenerationAt: now, lastGenerationError: truncate(reason, 300) },
+      });
+    };
     const written = await writer.write(sources, now);
     if (!written.ok) {
       if (written.stopRun) {
-        // Feilen gjelder API-et eller nøkkelen, ikke saken, så forsøket telles ikke.
-        stats.stopped = written.reason;
+        await stop(written.reason);
         break;
       }
       stats.failed++;
@@ -317,13 +357,14 @@ async function generate(
     const moderation = await moderator.moderate(sources, article, now);
     if (!moderation.ok && moderation.stopRun) {
       // Uten moderering lagres ingenting. Saken skrives på nytt i neste kjøring.
-      stats.stopped = moderation.reason;
+      await stop(moderation.reason);
       break;
     }
     const decision = decide(article, checks, moderation, config.editorial);
     const saved = await saveArticle(db, {
       storyId: story.id,
       itemIds: story.items.map((item) => item.id),
+      at,
       article,
       sources,
       decision,
@@ -350,8 +391,9 @@ async function generate(
 
 type SaveInput = {
   storyId: string;
-  /** Alle analyserbare elementer i saken da kildene ble lest. */
+  /** Alle analyserbare elementer i saken da kildene ble lest, og når det var. */
   itemIds: string[];
+  at: Date;
   article: WrittenArticle;
   sources: PreparedSource[];
   decision: Decision;
@@ -381,7 +423,10 @@ async function saveArticle(db: Db, input: SaveInput): Promise<"saved" | "changed
     return await db.$transaction(async (tx) => {
       const story = await tx.story.findUnique({
         where: { id: input.storyId },
-        select: { article: { select: { id: true } }, items: { where: analyzableItemAt(now), select: { id: true } } },
+        select: {
+          article: { select: { id: true } },
+          items: { where: usableSources(input.at), select: { id: true } },
+        },
       });
       if (!story) return "changed";
       if (story.article) return "exists";

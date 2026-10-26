@@ -250,6 +250,18 @@ describe("manuell flytting av elementer", () => {
     vi.restoreAllMocks();
   });
 
+  it("flytter ikke til en sak som ble slettet mellom kontroll og skriving", async () => {
+    const target = await db.story.create({ data: { slug: "tom", workingTitle: "Tom" } });
+    const original = db.$transaction.bind(db) as (fn: unknown) => Promise<unknown>;
+    vi.spyOn(db, "$transaction").mockImplementationOnce((async (fn: unknown) => {
+      await db.story.delete({ where: { id: target.id } });
+      return original(fn);
+    }) as never);
+    await expect(moveItem(db, ids.b, target.id, NOW)).rejects.toEqual(code("endret-underveis"));
+    expect(await db.sourceItem.findUniqueOrThrow({ where: { id: ids.b } })).toMatchObject({ storyId: ids.flom });
+    vi.restoreAllMocks();
+  });
+
   it("kan markere en gruppering som har stoppet, som avbrutt", async () => {
     await db.jobRun.create({ data: { type: "CLUSTER", trigger: "cron", startedAt: new Date(NOW.getTime() - 60_000) } });
     expect(await markClusteringAborted(db, NOW)).toBe(1);

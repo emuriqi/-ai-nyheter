@@ -69,7 +69,7 @@ async function discardDrafts(tx: Tx, storyIds: string[]): Promise<void> {
   if (deleted.count > 0) {
     await tx.story.updateMany({
       where: { id: { in: storyIds } },
-      data: { generationAttempts: 0, lastGenerationError: null },
+      data: { generationAttempts: 0, lastGenerationError: null, lastGenerationAt: null },
     });
   }
 }
@@ -198,6 +198,8 @@ export async function moveItem(db: Db, itemId: string, targetStoryId: string, no
 
   const moved = await db.$transaction(async (tx) => {
     if (await hasLockedArticle(tx, [item.storyId, targetStoryId])) return "har-artikkel" as const;
+    // Målsaken kan ha blitt slettet av en annen flytting siden kontrollen.
+    if ((await tx.story.count({ where: { id: targetStoryId } })) === 0) return false;
     const updated = await tx.sourceItem.updateMany({
       where: { id: item.id, storyId: item.storyId },
       data: { ...manualData(now, null), storyId: targetStoryId },

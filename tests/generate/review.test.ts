@@ -134,7 +134,7 @@ describe("godkjenning av artikler", () => {
     });
 
     await db.story.update({ where: { id: storyId }, data: { generationAttempts: 2 } });
-    await regenerateArticle(db, article.id, { ...rewrite, now: new Date("2026-10-10T09:00:00Z") });
+    await regenerateArticle(db, article.id, { ...rewrite, now: new Date("2026-10-10T07:00:00Z") });
     expect(await db.article.count()).toBe(0);
     expect(await db.articleRevision.count()).toBe(0);
     expect(await db.story.findUniqueOrThrow({ where: { id: storyId } })).toMatchObject({ generationAttempts: 0 });
@@ -173,9 +173,9 @@ describe("godkjenning av artikler", () => {
     );
     const old = { ...rewrite, now: new Date("2026-10-12T12:00:00Z") };
     await expect(regenerateArticle(db, article.id, old)).rejects.toEqual(code("for-gammel"));
-    // Saken startet 7. oktober kl. 10.14 UTC og er for gammel fra 10. oktober kl. 10.14. Med en time igjen
-    // er det ikke sikkert at en kjøring rekker den (to intervaller på 30 minutter), så utkastet beholdes.
-    const almost = { ...rewrite, now: new Date("2026-10-10T09:30:00Z") };
+    // Saken startet 7. oktober kl. 10.14 UTC og er for gammel fra 10. oktober kl. 10.14. Neste kjøring må rekke
+    // den, så med mindre enn tre timer igjen beholdes utkastet.
+    const almost = { ...rewrite, now: new Date("2026-10-10T07:30:00Z") };
     await expect(regenerateArticle(db, article.id, almost)).rejects.toEqual(code("for-gammel"));
     await db.sourceItem.updateMany({ where: { storyId }, data: { purgedAt: NOW, excerpt: null, bodyText: null } });
     await expect(regenerateArticle(db, article.id, rewrite)).rejects.toEqual(code("for-faa-kilder"));

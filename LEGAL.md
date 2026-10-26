@@ -26,7 +26,7 @@ Dokumentet utvides i hver fase. Det er ikke juridisk rådgivning.
 | Høflig henting: User-Agent med kontaktadresse, betingede forespørsler, minste intervall og størrelsesgrense | `ingest/http.ts` | ✅ |
 | Grupperingen analyserer bare tekst som kan analyseres: elementet og kilden er ikke reservert mot tekst- og datautvinning (også reservasjoner funnet etter at elementet ble hentet), kilden er aktiv, og teksten er ikke slettet. Det gjelder nye elementer, elementer i åpne saker som kan sendes til Claude, og ordvektene. Annen tekst analyseres ikke, heller ikke lokalt | `cluster/eligibility.ts` | ✅ |
 | Grupperingen sender bare tittel og et kort utdrag (maks 600 tegn) til Claude, og bare for elementer i gråsonen | `cluster/judge.ts` | ✅ |
-| Korte, merkede og krediterte sitater (`maxQuoteWords`, til sammen høyst `maxQuotedWordsPerSource` ord fra samme kilde), ellers egne formuleringer. Sitater som er for lange eller ikke står ordrett i kilden (fra fire ord), og ordrekker på mer enn `maxCopiedWords` ord som er like en kilde, stopper publisering. Alle vanlige sitattegn og sitatstrek kontrolleres. Nær-kopier med små endringer, mye sitering fra samme kilde, kopierte navnelister og titler, og sitater som kan være oversatt fra en kilde på et annet språk, flagges for redaktøren | `generate/checks.ts`, `generate/quotes.ts`, promptene | ✅ |
+| Korte, merkede og krediterte sitater (`maxQuoteWords`, til sammen høyst `maxQuotedWordsPerSource` ord fra samme kilde), ellers egne formuleringer. Sitater som er for lange eller ikke står ordrett i kilden (fra fire ord), og ordrekker på mer enn `maxCopiedWords` ord som er like en kilde, stopper publisering. Alle vanlige sitattegn og sitatstrek kontrolleres. Nær-kopier med små endringer, mye sitering fra samme kilde, forkortede sitater og innskudd i sitater, kopierte navnelister og titler, og sitater som kan være oversatt fra en kilde på et annet språk, flagges for redaktøren | `generate/checks.ts`, `generate/quotes.ts`, promptene | ✅ |
 | Artikler bygger bare på kildene, og alle kildene Claude fikk se, lenkes med kildeangivelse fra lisensen (`attribution`). Kildetekst vises aldri for lesere | `generate/run.ts`, `/sak/[slug]` | ✅ |
 | Til Claude sendes bare tekst som kan analyseres (samme filter som grupperingen), og bare så mye som trengs (`maxSourceCharsPerItem`, `maxSourceCharsTotal`) | `generate/sources.ts` | ✅ |
 | Side der rettighetshavere kan be om fjerning                                               | Kontakt / fjerning           | Fase 7 |
@@ -48,8 +48,8 @@ artikkelsidene (`allowFullTextFetch`) kan regnes som skraping, og er derfor slå
   artikler uansett.
 - Hver artikkel har synlig merking øverst (`ai.articleLabel`) og en forklaring av hvordan den ble laget (modell,
   kontroller, godkjenning). Merkingen vises for alle artikler og styres ikke av noe felt.
-- Maskinlesbar merking: `<meta name="ai-generated" content="true">` i `<head>` på artikkelsiden og forsiden
-  (metadata strømmes ikke til `<body>`, se `htmlLimitedBots` i `next.config.ts`), og strukturerte data (schema.org
+- Maskinlesbar merking: `<meta name="ai-generated" content="true">` i `<head>` på artikkelsiden og forsiden, for
+  alle klienter og uten JavaScript (taggen står i den statiske delen av siden), og strukturerte data (schema.org
   `NewsArticle` med `creator` som programvare og kildene i `isBasedOn`).
 - Forklaringen av hvordan saken ble laget, sier bare at AI-modereringen kontrollerte teksten når den faktisk gjorde
   det.

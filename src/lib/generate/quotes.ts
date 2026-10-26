@@ -16,9 +16,31 @@ const OTHER_MARKS: Record<string, string> = { "“": "”", "„": "“”", "�
 /** Et avsnitt som starter med sitatstrek: «– Vi er bekymret, sier hun.» */
 const DASH_QUOTE = /^[ \t]*[–—][ \t]+/;
 
-/** Der et sitat med sitatstrek slutter og den som siteres, nevnes. */
-const ATTRIBUTION =
-  /[,?!]\s+(?:[–—]\s+)?(?:sier|sa|skriver|skrev|opplyser|opplyste|forteller|fortalte|uttaler|uttalte|mener|understreker|understreket|legger til|la til|påpeker|påpekte|svarer|svarte|spør|spurte|advarer|advarte|varsler|varslet)(?![\p{L}\p{N}])/u;
+/** Verb og uttrykk som viser hvem som siteres: «, sier hun», «, heter det», «, ifølge NVE». */
+const SPEECH =
+  "sier|sa|skriver|skrev|opplyser|opplyste|forteller|fortalte|uttaler|uttalte|mener|mente|understreker|" +
+  "understreket|legger til|la til|påpeker|påpekte|svarer|svarte|spør|spurte|advarer|advarte|varsler|varslet|" +
+  "forklarer|forklarte|konstaterer|konstaterte|bekrefter|bekreftet|presiserer|presiserte|tilføyer|tilføyde|" +
+  "utdyper|utdypet|fastslår|fastslo|erkjenner|erkjente|innrømmer|innrømmet|anslår|anslo|minner om|heter det|ifølge";
+
+/**
+ * Der et sitat med sitatstrek slutter og den som siteres, nevnes: «, sier hun»
+ * eller en egen setning som «. Det sier hydrologen».
+ */
+const ATTRIBUTION = new RegExp(
+  String.raw`[,?!]\s+(?:[–—]\s+)?(?:${SPEECH})(?![\p{L}\p{N}])|[.!?]\s+(?:Det|Dette)\s+(?:${SPEECH})(?![\p{L}\p{N}])`,
+  "u",
+);
+
+/** Posisjonen til » som lukker « på `open`, med nøstede «» talt med, eller -1. */
+function matchingClose(line: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < line.length; i++) {
+    if (line[i] === "«") depth++;
+    else if (line[i] === "»" && --depth === 0) return i;
+  }
+  return -1;
+}
 
 /**
  * Finner direkte sitater i en tekst: alt i «», “”, „“, ‹›, ‘’ eller "", og
@@ -45,19 +67,14 @@ export function findQuotes(text: string): Quote[] {
       } else {
         // Sitatet fortsetter i dette avsnittet.
         const open = lead[0].length - 1;
-        const close = line.indexOf("»", open + 1);
-        const reopen = line.indexOf("«", open + 1);
-        const closed = close !== -1 && (reopen === -1 || close < reopen);
-        const end = closed ? close : reopen !== -1 ? reopen : line.length;
-        addPart(pending, line.slice(open + 1, end), [at + open, at + (closed ? end + 1 : end)]);
-        if (closed) pending.unclosed = false;
-        if (closed || reopen !== -1) {
-          quotes.push(pending);
-          pending = null;
-          pos = closed ? end + 1 : end;
-        } else {
-          continue;
-        }
+        const close = matchingClose(line, open);
+        const end = close === -1 ? line.length : close;
+        addPart(pending, line.slice(open + 1, end), [at + open, at + (close === -1 ? end : end + 1)]);
+        if (close === -1) continue;
+        pending.unclosed = false;
+        quotes.push(pending);
+        pending = null;
+        pos = close + 1;
       }
     }
 
@@ -73,14 +90,11 @@ export function findQuotes(text: string): Quote[] {
     while (pos < line.length) {
       const ch = line[pos];
       if (ch === "«") {
-        const close = line.indexOf("»", pos + 1);
-        const reopen = line.indexOf("«", pos + 1);
-        if (close !== -1 && (reopen === -1 || close < reopen)) {
+        // Et sitat i sitatet («Vi kaller det «krise»») hører med til det ytre sitatet.
+        const close = matchingClose(line, pos);
+        if (close !== -1) {
           quotes.push(quote(line.slice(pos + 1, close), [at + pos, at + close + 1], false));
           pos = close + 1;
-        } else if (reopen !== -1) {
-          quotes.push(quote(line.slice(pos + 1, reopen), [at + pos, at + reopen], true));
-          pos = reopen;
         } else {
           // Kan fortsette i neste avsnitt.
           pending = quote(line.slice(pos + 1), [at + pos, at + line.length], true);

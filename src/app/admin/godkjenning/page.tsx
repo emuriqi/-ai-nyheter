@@ -86,7 +86,7 @@ async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjen
           <ul className="mt-4 space-y-8">
             {pending.map((article) => (
               <li key={article.id}>
-                <ReviewCard article={article} />
+                <ReviewCard article={article} pages={pages} />
               </li>
             ))}
           </ul>
@@ -109,6 +109,7 @@ async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjen
                 </span>
                 <form action={retryStoryAction}>
                   <input type="hidden" name="storyId" value={story.id} />
+                  <PageFields pages={pages} />
                   <button type="submit" className={button}>
                     Prøv igjen
                   </button>
@@ -133,6 +134,7 @@ async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjen
                 </span>
                 <form action={regenerateArticleAction}>
                   <input type="hidden" name="articleId" value={article.id} />
+                  <PageFields pages={pages} />
                   <button type="submit" className={button}>
                     Skriv på nytt
                   </button>
@@ -158,6 +160,7 @@ async function Queue({ searchParams }: { searchParams: PageProps<"/admin/godkjen
                 <span className="text-muted"> · publisert {formatDateTime(article.publishedAt)}</span>
                 <form action={unpublishArticleAction} className="mt-2 flex flex-wrap items-end gap-2">
                   <input type="hidden" name="articleId" value={article.id} />
+                  <PageFields pages={pages} />
                   <label className="flex min-w-0 flex-1 flex-col text-xs text-muted">
                     Begrunnelse for avpublisering
                     <input
@@ -216,7 +219,19 @@ function stringify(values: Record<string, number>): Record<string, string> {
   return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, String(v)]));
 }
 
-function ReviewCard({ article }: { article: QueueArticle }) {
+type Pages = Awaited<ReturnType<typeof getReviewQueue>>["pages"];
+
+/** Sidetallene for listene, så siden åpnes på samme sted etter en handling. */
+function PageFields({ pages }: { pages: Pages }) {
+  return (
+    <>
+      <input type="hidden" name="avvist" value={pages.rejected.page} />
+      <input type="hidden" name="publisert" value={pages.published.page} />
+    </>
+  );
+}
+
+function ReviewCard({ article, pages }: { article: QueueArticle; pages: Pages }) {
   const moderation = article.latest?.moderation;
   return (
     <article className="rounded-lg border border-border p-4">
@@ -275,18 +290,21 @@ function ReviewCard({ article }: { article: QueueArticle }) {
       <div className="mt-6 flex flex-wrap items-end gap-3 border-t border-border pt-4">
         <form action={approveArticleAction}>
           <input type="hidden" name="articleId" value={article.id} />
+          <PageFields pages={pages} />
           <button type="submit" className={button} disabled={article.blocked}>
             Godkjenn og publiser
           </button>
         </form>
         <form action={regenerateArticleAction}>
           <input type="hidden" name="articleId" value={article.id} />
+          <PageFields pages={pages} />
           <button type="submit" className={button}>
             Skriv på nytt
           </button>
         </form>
         <form action={rejectArticleAction} className="flex min-w-0 flex-1 flex-wrap items-end gap-2">
           <input type="hidden" name="articleId" value={article.id} />
+          <PageFields pages={pages} />
           <label className="flex min-w-0 flex-1 flex-col text-xs text-muted">
             Begrunnelse for avvisning
             <input name="note" required maxLength={500} className="mt-1 rounded border border-border px-2 py-1" />

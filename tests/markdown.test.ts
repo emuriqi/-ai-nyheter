@@ -34,13 +34,35 @@ describe("brødtekst i Markdown", () => {
   });
 
   it("tolker mellomtitler og lister også uten tom linje før eller etter", () => {
-    expect(parseBody("Innledning.\n## Bakgrunn\nRegjeringen opplyser at\n- én\n- to\nSiste linje.")).toEqual([
+    expect(parseBody("Innledning.\n## Bakgrunn\nRegjeringen opplyser at\n- én\n- to\n\nSiste linje.")).toEqual([
       { type: "paragraph", text: "Innledning." },
       { type: "heading", text: "Bakgrunn" },
       { type: "paragraph", text: "Regjeringen opplyser at" },
       { type: "list", items: ["én", "to"] },
       { type: "paragraph", text: "Siste linje." },
     ]);
+  });
+
+  it("tolker nummererte lister og lar en linje rett etter et punkt høre til punktet", () => {
+    expect(parseBody("Tiltakene er:\n\n1. Stenge veien.\n2. Varsle beboerne\nsom bor nær elva.")).toEqual([
+      { type: "paragraph", text: "Tiltakene er:" },
+      { type: "list", ordered: true, items: ["Stenge veien.", "Varsle beboerne som bor nær elva."] },
+    ]);
+    expect(parseBody("- Første punkt som\n  fortsetter her\n- Andre punkt")).toEqual([
+      { type: "list", items: ["Første punkt som fortsetter her", "Andre punkt"] },
+    ]);
+  });
+
+  it("lar et tall først på en linje midt i et avsnitt være vanlig tekst", () => {
+    expect(parseBody("Fristen er utsatt fra mai\n2. juni er ny frist.")).toEqual([
+      { type: "paragraph", text: "Fristen er utsatt fra mai 2. juni er ny frist." },
+    ]);
+  });
+
+  it("viser nummererte lister som <ol>", () => {
+    expect(renderToStaticMarkup(createElement(ArticleBody, { body: "1. Én\n2. To" }))).toContain(
+      '<ol class="list-decimal space-y-1 pl-6"><li>Én</li><li>To</li></ol>',
+    );
   });
 
   it("gir mellomtitlene nivået som passer der teksten vises", () => {

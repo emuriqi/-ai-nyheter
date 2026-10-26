@@ -204,6 +204,17 @@ describe("admin: godkjenning av artikler", () => {
     );
   });
 
+  it("går tilbake til samme sider av listene etter en handling", async () => {
+    requestHeaders(`Basic ${Buffer.from(`admin:${TOKEN}`).toString("base64")}`);
+    await expect(
+      unpublishArticleAction(form({ articleId: "abc123", note: "Begrunnelse", publisert: "3", avvist: "1" })),
+    ).rejects.toThrow("REDIRECT /admin/godkjenning?melding=avpublisert&publisert=3");
+    // Bare gyldige sidetall følger med.
+    await expect(approveArticleAction(form({ articleId: "abc123", publisert: "../x", avvist: "2" }))).rejects.toThrow(
+      "REDIRECT /admin/godkjenning?melding=publisert&avvist=2",
+    );
+  });
+
   it("«Prøv igjen» nullstiller en sak der skrivingen feilet", async () => {
     requestHeaders();
     await expect(retryStoryAction(form({ storyId: "abc" }))).rejects.toThrow("NEXT_HTTP_ERROR_FALLBACK;404");

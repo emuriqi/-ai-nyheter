@@ -18,11 +18,14 @@ export function ArticleBody({ body, headingLevel = 2 }: { body: string; headingL
           );
         }
         if (block.type === "list") {
-          return (
+          const items = block.items.map((item, j) => <li key={j}>{item}</li>);
+          return block.ordered ? (
+            <ol key={i} className="list-decimal space-y-1 pl-6">
+              {items}
+            </ol>
+          ) : (
             <ul key={i} className="list-disc space-y-1 pl-6">
-              {block.items.map((item, j) => (
-                <li key={j}>{item}</li>
-              ))}
+              {items}
             </ul>
           );
         }

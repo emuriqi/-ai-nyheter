@@ -200,9 +200,10 @@ Etter grupperingen skrives artikler for saker som er klare (`src/lib/generate/`)
 1. **Hvilke saker.** Saker uten artikkel, med minst `minSourcesPerStory` kilder som kan analyseres, som ikke har
    fått nye kilder de siste `settleMinutes` minuttene (målt både fra kildenes tid og fra når de ble lagt i saken,
    så en kilde som hentes sent, også gir ventetid), og som startet for mindre enn `maxStoryAgeHours` timer siden.
-   Høyst `maxArticlesPerRun` per kjøring, og en sak gis opp etter `maxAttemptsPerStory` mislykkede forsøk.
-2. **Kildene.** Bare tekst som kan analyseres (samme filter som grupperingen) og som ikke har passert
-   sletteperioden. Kildene nummereres K1, K2 … i tidsrekkefølge, med utgiver, språk og publiseringstid i norsk tid,
+   Høyst `maxArticlesPerRun` per kjøring, og en sak gis opp etter `maxAttemptsPerStory` mislykkede forsøk. Saker
+   som ikke er forsøkt før, tas først, så en sak som feiler, ikke stenger for de andre.
+2. **Kildene.** Bare tekst som kan analyseres (samme filter som grupperingen) og som ikke passerer
+   sletteperioden før skrivingen og modereringen er ferdig (20 minutter). Kildene nummereres K1, K2 … i tidsrekkefølge, med utgiver, språk og publiseringstid i norsk tid,
    og kuttes etter `maxSourceCharsPerItem` og `maxSourceCharsTotal`. Kuttede kilder merkes `avkortet="ja"`. Meldingen
    starter med når artikkelen skrives, så relative tidsord («i dag», «i går») kan regnes om. Teksten kan ikke lage
    egne tagger i meldingen, og prompten sier at den er data, ikke instruksjoner.
@@ -213,16 +214,19 @@ Etter grupperingen skrives artikler for saker som er klare (`src/lib/generate/`)
    «[K1]» fjernes fra teksten før kontrollene.
 4. **Automatiske kontroller** (`checks.ts`, `quotes.ts`, `numbers.ts`), uavhengig av Claude:
    - direkte sitater i «», “”, „“, ‹›, ‘’ eller "", og avsnitt med sitatstrek («– …, sier X»), også over flere
-     avsnitt: lengre enn `maxQuoteWords` ord, ikke ordrett i en kilde (utelatelser med […] godtas, delene må stå i
-     samme rekkefølge), og til sammen mer enn `maxQuotedWordsPerSource` ord fra samme kilde
+     avsnitt og med sitater i sitatet: lengre enn `maxQuoteWords` ord, ikke ordrett i en kilde (delene rundt en
+     utelatelse […] eller et innskudd i klammer må stå i samme rekkefølge, og redaktøren bes sjekke at meningen er
+     den samme), og til sammen mer enn `maxQuotedWordsPerSource` ord fra samme kilde
    - ordrekker på mer enn `maxCopiedWords` ord som er like en kilde utenfor sitat, og avsnitt der minst halvparten
      av ordrekkene på fire ord er like én kilde (nær-kopi med små endringer)
-   - tall som ikke står i kildene, også tall skrevet med ord («tre»), med tusenskille, i millioner, som datoer og
-     som klokkeslett. Datoer godtas dagen før, samme dag og dagen etter at en kilde ble publisert (i norsk tid)
+   - tall som ikke står i kildene, også tall skrevet med ord («tre»), med tusenskille, i millioner (som må ha
+     samme størrelse som i kilden), som datoer og som klokkeslett («kl.», «klokka», «klokken»). Engelske kilder
+     leses med engelske tallord, tusenskille og datoer. Datoer godtas dagen før, samme dag og dagen etter at en
+     kilde ble publisert, regnet i kalenderdager i norsk tid
    - kilder som ikke finnes, navngitte privatpersoner (navnet må stå i teksten), navn som ser ut som personer, men
      ikke står i personlisten, og påstander om personer med færre enn `minSourcesForPersonClaims` uavhengige kilder
      (kilder som nevner personen, med ulike utgivere)
-   - lenker, HTML og lengde
+   - lenker, HTML, lengde og kildenøkler som står igjen i teksten («ifølge K2»)
 5. **AI-moderering.** Et eget kall med egen prompt (`prompts/article-moderate.md`) sammenligner artikkelen setning
    for setning med kildene og rapporterer udokumenterte påstander, feil gjengivelser (også feil tidsangivelser),
    tall og sitater uten kilde, kopiert tekst, privatpersoner, sensitive temaer, spekulasjon og ubalanse.
@@ -238,26 +242,31 @@ Etter grupperingen skrives artikler for saker som er klare (`src/lib/generate/`)
    kildene til saken flyttet mens artikkelen ble skrevet, lagres ingenting, og saken skrives på nytt i neste
    kjøring.
 
-Feil hos Claude API stopper kjøringen: en ugyldig nøkkel, manglende tilgang, overbelastning, for mange kall eller
-tidsavbrudd gjelder ikke saken, så forsøket telles ikke, jobben merkes som feilet, og cron-ruten svarer 500. Bare
-feil som gjelder selve saken (avslag, svar som ikke kan tolkes) teller som forsøk. Hvert kall har en tidsgrense på
-5 minutter og ett nytt forsøk, og kjøringen starter ikke på nye saker etter 40 minutter, så den blir ferdig lenge
-før en annen prosess kan regne den som avbrutt.
+Feil hos Claude API som ikke gjelder saken, stopper kjøringen: ugyldig nøkkel, manglende tilgang, brukt opp
+kreditt, feil i oppsettet (for eksempel en beta organisasjonen ikke har), overbelastning, for mange kall og
+nettverksfeil. Forsøket telles ikke, saken merkes med feilen og tas sist i neste kjøring, jobben merkes som
+feilet, og cron-ruten svarer 500. Feil som kan gjelde selve saken (avslag, svar som ikke kan tolkes, og svar som
+ikke kom innen tidsgrensen) teller som forsøk. Hvert kall har en tidsgrense på 5 minutter og ett nytt forsøk, og
+kjøringen starter ikke på nye saker etter 40 minutter, så den blir ferdig lenge før en annen prosess kan regne den
+som avbrutt.
 
 Admin-siden **Godkjenning** viser hver artikkel med funnene gruppert («Hindrer publisering», «Må vurderes», «Til
 orientering»), teksten og kildene. Redaktøren kan godkjenne og publisere, avvise med begrunnelse, eller slette
 utkastet så saken skrives på nytt. «Skriv på nytt» sletter ikke utkastet hvis saken ikke ville blitt skrevet igjen
-(for gammel, for få kilder, eller skriving ikke satt opp). Publiserte artikler kan avpubliseres med begrunnelse; det
-føres som en ny versjon i endringsloggen. Avviste og publiserte artikler vises side for side, så alle kan nås. Saker
+(skriving ikke satt opp, for få kilder, eller mindre enn tre timer igjen før aldersgrensen, så neste kjøring rekker
+den). Publiserte artikler kan avpubliseres med begrunnelse; det føres som en ny versjon i endringsloggen. Avviste og
+publiserte artikler vises side for side, så alle kan nås, og siden åpnes på samme sted etter en handling. Saker
 der skrivingen feilet, vises med årsak og en knapp for å prøve igjen (for eksempel etter at nøkkelen er rettet).
 Flyttes kildene til en sak med et upublisert utkast (under Saker), slettes utkastet og skrives på nytt.
 
 Den offentlige artikkelsiden **/sak/[slug]** viser bare publiserte artikler, med AI-merking øverst, kildene med
 lenke og kildeangivelse, «Slik ble saken laget» (modell, om AI-modereringen faktisk kjørte, og om redaktøren
-godkjente) og endringslogg. Siden har maskinlesbar merking: `<meta name="ai-generated" content="true">` i `<head>`
-(metadata strømmes ikke, se `htmlLimitedBots` i `next.config.ts`) og strukturerte data (schema.org `NewsArticle`
-med `creator` som programvare og `isBasedOn` med kildene). Forsiden har samme meta-tagg. En sak uten publisert
-artikkel gir siden «fant ikke» med `noindex`.
+godkjente) og endringslogg. Siden har maskinlesbar merking: `<meta name="ai-generated" content="true">` i
+`<head>` for alle, også verktøy uten JavaScript (taggen står i den statiske layouten, `src/app/sak/[slug]/layout.tsx`,
+som React løfter inn i `<head>`), `ai-model` i metadata, og strukturerte data (schema.org `NewsArticle` med `creator`
+som programvare og `isBasedOn` med kildene). Forsiden har samme meta-tagg. Tittel og beskrivelse strømmes som
+vanlig i Next.js, og står i `<head>` for roboter som ikke kjører JavaScript. En sak uten publisert artikkel gir
+siden «fant ikke» med `noindex`.
 
 Kontrollene er testet på syntetiske artikler (`tests/fixtures/generated-articles.json`): for tre saker i korpuset
 én god artikkel og fem varianter med hver sin innplantede feil (oppdiktet tall, for langt sitat, oppdiktet sitat,
@@ -377,19 +386,25 @@ aldri mot nettet: innhentingen testes med en falsk `fetch` og syntetiske eksempe
   publisering, de gode gir ingen funn) og hver kontroll for seg med grensene (sitatlengde, korte sitater,
   sitattegn, sitatstrek, sitater over flere avsnitt, utelatelser og innskudd, samlet sitatmengde, oversatte
   sitater, kopiert og nesten kopiert tekst, navn og titler, tall, tallord, datoer, klokkeslett, privatpersoner,
-  personpåstander, navn utenfor personlisten, lenker, HTML og lengde), den samlede vurderingen, kildene Claude får
+  personpåstander, navn i genitiv og institusjonsnavn, navn utenfor personlisten, kildenøkler, lenker, HTML og
+  lengde; hver normalisering av tall testes mot en kilde der bare den ene formen står, også rundt skifte til
+  vintertid), den samlede vurderingen, kildene Claude får
   (rekkefølge, budsjett, språk, avkorting, norsk tid, uten mulighet til å lage tagger), skriver- og moderatorkallet
   med ekte SDK-klient (prompt med innstillingene, tidspunkt, skjema med enum, avslag, ugyldige svar, svar fra
-  reservemodellen, tidsgrense og nye forsøk, tokens fra alle forsøk, at feil nøkkel og overbelastning stopper
-  kjøringen), og jobben mot en ekte database (hvilke saker som er klare, lagring av artikkel, versjon, kilder og
-  moderering, automatisk publisering, feil som telles og feil som stopper kjøringen, tidsfristen, kilder som flyttes
-  eller saker som slettes underveis, og samtidige jobber og prosesser)
+  reservemodellen, tidsgrense og nye forsøk, tokens fra alle forsøk, hvilke feil fra API-et som stopper kjøringen og
+  hvilke som telles mot saken), og jobben mot en ekte database (hvilke saker som er klare og i hvilken rekkefølge,
+  lagring av artikkel, versjon, kilder og moderering, automatisk publisering, feil som telles og feil som stopper
+  kjøringen, tidsfristen, tekst som utløper underveis, kilder som flyttes eller saker som slettes underveis, og
+  samtidige jobber og prosesser)
 - godkjenning: publisering, avvisning, ny skriving (ikke for saker som ikke ville blitt skrevet igjen), «Prøv igjen»
-  og avpublisering med endringslogg, sidevisning av publiserte og avviste artikler, at artikler som bryter faste
+  og avpublisering med endringslogg, sidevisning av publiserte og avviste artikler (også sidetall som er for høye, og
+  at sidetallene beholdes etter en handling), at artikler som bryter faste
   regler ikke kan publiseres, og at bare publiserte artikler vises for lesere
-- artikkelsiden: synlig og maskinlesbar AI-merking, strukturerte data, kildene med kreditering uten kildetekst, og
+- artikkelsiden: synlig og maskinlesbar AI-merking (også at meta-taggen står i den statiske layouten), strukturerte
+  data, kildene med kreditering uten kildetekst, og
   teksten om hvordan saken ble kontrollert, også når AI-modereringen ikke kunne kjøre
-- brødteksten: avsnitt, mellomtitler og lister (også uten tom linje imellom), nivå på mellomtitlene, og at HTML
+- brødteksten: avsnitt, mellomtitler, punktlister og nummererte lister (også uten tom linje imellom, og med
+  fortsettelseslinjer), nivå på mellomtitlene, og at HTML
   vises som tekst
 - hele pipelinen mot en ekte database: synkronisering, innhenting, sletting av utløpt tekst (før grupperingen og
   skrivingen), gruppering, skriving og oppsummeringen, at slettingen kjører selv om et steg feiler, og at en feil i

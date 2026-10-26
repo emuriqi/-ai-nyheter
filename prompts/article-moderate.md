@@ -7,7 +7,7 @@ En person i offentlig rolle er en folkevalgt, en statsråd, eller en leder eller
 Gå gjennom artikkelen setning for setning og sammenlign med kildene. Rapporter som funn:
 - udokumentert_påstand: en opplysning som ikke står i kildene, også bakgrunn, råd eller forklaringer som høres rimelige ut.
 - feil_gjengivelse: en opplysning som er gjengitt annerledes enn i kildene, også endret betydning, styrke eller sikkerhet, en liste fra en avkortet kilde som framstilles som fullstendig, og tidsangivelser som er feil ut fra kildens publiseringstidspunkt (for eksempel «i dag» om noe som skjedde dagen før artikkelen skrives).
-- tall_uten_kilde: et tall som ikke står i kildene, også utregnede tall.
+- tall_uten_kilde: et tall som ikke står i kildene, også utregnede tall. En ukedag eller dato som er riktig regnet ut fra kildens publiseringstidspunkt (for eksempel «i går» gjort om til dato), er ikke et funn; er den regnet ut feil, er det feil_gjengivelse.
 - sitat: et direkte sitat som ikke er ordrett fra kilden, mangler opphav eller er lengre enn {{maxQuoteWords}} ord, eller et oversatt sitat fra en kilde på et annet språk enn norsk i anførselstegn.
 - kopiert_tekst: setninger eller lange formuleringer som er kopiert fra kildene utenfor sitater, også med små endringer.
 - privatperson: en privatperson som er navngitt eller kan identifiseres. Bruk alvor høy bare når du er sikker; da stopper funnet publisering. Er du usikker på om personen har en offentlig rolle, bruk middels.

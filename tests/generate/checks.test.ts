@@ -84,27 +84,87 @@ describe("tall, datoer og klokkeslett", () => {
       "20000",
       "4.6",
       "3250",
-      "1.2",
+      "1200000",
     ]);
+    // I en engelsk kilde er komma tusenskille og punktum desimaltegn.
+    expect(numbersIn("around 4,600 jobs and 4.6 percent", { role: "kilde", language: "en" })).toEqual(["4600", "4.6"]);
   });
 
-  it("godtar samme tall skrevet på en annen måte", () => {
-    const sources = [
-      source(
-        "Varselet gjelder fra 08.10.2026 kl. 06:00 til kl. 14:00. Tre personer er evakuert. " +
-          "Det gjelder 3 250 husstander og 1 200 000 kroner i 2026/2027. Prisen er 1,2 millioner kroner.",
-      ),
-    ];
+  // Kilden er publisert 1. september kl. 05.17 norsk tid, langt fra datoene og klokkeslettene i testene,
+  // og hver form står bare én gang: i kilden eller i artikkelen.
+  const far = (text: string, language = "nb") =>
+    source(text, "K1", { publishedAt: new Date("2026-09-01T03:17:00Z"), language });
+  it.each([
+    [
+      "dato med tall mot dato med ord",
+      "Varselet gjelder fra 08.10.2026.",
+      "Varselet gjelder fra 8. oktober.",
+      "9. oktober",
+    ],
+    ["dato med ord mot dato uten år", "Fristen er 14. november.", "Fristen er 14.11.", "15.11."],
+    ["dato i intervall", "Stengt fra 8. til 10. oktober.", "Stengt 8. oktober og 10. oktober.", "11. oktober"],
+    ["engelsk dato", "Open until 31 December 2030.", "Åpent til 31. desember 2030.", "30. desember 2030", "en"],
+    ["klokkeslett med kolon mot klokken", "Fra kl. 06:00.", "Fra klokken 06.", "klokken 07"],
+    ["klokka mot kl.", "Neste publisering er klokka 08.30.", "Neste publisering er kl. 08.30.", "kl. 08.45"],
+    ["klokkeslett uten kl.", "Møtet starter 10.15.", "Møtet starter kl. 10.15.", "kl. 10.20"],
+    ["tusenskille", "Det gjelder 3 250 husstander.", "Det gjelder 3.250 husstander.", "3.260 husstander"],
+    ["millioner", "Prisen er 1 200 000 kroner.", "Prisen er 1,2 millioner kroner.", "1,3 millioner kroner"],
+    ["millioner omvendt", "Prisen er 1,2 millioner kroner.", "Prisen er 1 200 000 kroner.", "1 300 000 kroner"],
+    ["en milliard", "Det koster 1 milliard kroner.", "Det koster en milliard kroner.", "en million kroner"],
+    ["skoleår", "Gjelder skoleåret 2026/2027.", "Gjelder skoleåret 2026/27.", "2028/29"],
+    ["tallord", "Tre personer er evakuert.", "3 personer er evakuert.", "4 personer"],
+    ["engelsk tallord", "Three regions are affected.", "Tre regioner er berørt.", "Fire regioner", "en"],
+    ["engelsk tusenskille", "Around 4,600 jobs.", "Rundt 4600 jobber.", "4700 jobber", "en"],
+  ])("godtar %s, men ikke et annet tall", (_name, sourceText, same, other, language = "nb") => {
+    const sources = [far(sourceText, language)];
+    expect(of(checkArticle(article({ ingress: same }), sources, editorial), "tall_uten_kilde")).toEqual([]);
+    expect(
+      of(checkArticle(article({ ingress: `${same} Også ${other}.` }), sources, editorial), "tall_uten_kilde"),
+    ).toHaveLength(1);
+  });
+
+  it("krever at et tall med skalaord har samme størrelse som i kilden", () => {
+    const sources = [far("Prosjektet koster 3 millioner kroner og gjelder 20 husstander.")];
+    for (const wrong of ["3 milliarder kroner", "3 mrd. kroner", "20 tusen husstander"]) {
+      expect(
+        of(checkArticle(article({ ingress: `Det gjelder ${wrong}.` }), sources, editorial), "tall_uten_kilde"),
+      ).toHaveLength(1);
+    }
+    expect(
+      of(checkArticle(article({ ingress: "Det koster 3 millioner kroner." }), sources, editorial), "tall_uten_kilde"),
+    ).toEqual([]);
+  });
+
+  it("regner ikke «tre i kraft» og «et tre» som tallet tre", () => {
+    const sources = [far("Endringene trer i kraft 1. januar 2027. Et tre falt over veien.")];
     const findings = checkArticle(
-      article({
-        ingress:
-          "Varselet gjelder fra torsdag 8. oktober klokken 06 til klokken 14.00. 3 personer er evakuert fra 3.250 husstander.",
-        brodtekst: `${article().brodtekst} Budsjettet for 2026/27 er 1,2 millioner kroner, og prisen er 1 200 000 kroner.`,
-      }),
+      article({ ingress: "Endringene skal tre i kraft 1. januar 2027, og et tre falt over veien." }),
       sources,
       editorial,
     );
     expect(of(findings, "tall_uten_kilde")).toEqual([]);
+  });
+
+  it("godtar klokkeslettet kilden ble publisert, i norsk tid", () => {
+    // 07.00 UTC er 09.00 norsk sommertid.
+    const sources = [source("Farevarselet er sendt ut.", "K1", { publishedAt: new Date("2026-09-01T07:00:00Z") })];
+    expect(
+      of(checkArticle(article({ ingress: "Varselet kom kl. 9." }), sources, editorial), "tall_uten_kilde"),
+    ).toEqual([]);
+    expect(
+      of(checkArticle(article({ ingress: "Varselet kom kl. 7." }), sources, editorial), "tall_uten_kilde"),
+    ).toEqual([["middels", "kl. 7"]]);
+  });
+
+  it("regner dagen før og etter i kalenderdager når sommertiden skifter", () => {
+    // Søndag 25. oktober 2026 kl. 00.30 sommertid (vintertid fra kl. 03).
+    const dst = [source("Varselet gjelder i morgen.", "K1", { publishedAt: new Date("2026-10-24T22:30:00Z") })];
+    expect(
+      of(checkArticle(article({ ingress: "Varselet gjelder 26. oktober." }), dst, editorial), "tall_uten_kilde"),
+    ).toEqual([]);
+    expect(
+      of(checkArticle(article({ ingress: "Varselet gjelder 23. oktober." }), dst, editorial), "tall_uten_kilde"),
+    ).toHaveLength(1);
   });
 
   it("finner oppdiktede tall skrevet med ord, og godtar ikke publiseringsdatoen som frie tall", () => {
@@ -236,7 +296,36 @@ describe("sitater", () => {
     expect(verbatim).toEqual([]);
   });
 
-  it("godtar utelatelser med […] og (…), men merker innskudd i klammer", () => {
+  it("kjenner igjen vanlige måter å nevne den som siteres, etter sitatstrek", () => {
+    const sources = [source("– Vi har fått svært mange henvendelser fra innbyggere i hele fylket, sier hun.")];
+    for (const attribution of [
+      ", forklarer hun.",
+      ", konstaterer hun.",
+      ", heter det i meldingen.",
+      ". Det sier hydrolog Ola Hansen.",
+    ]) {
+      const body = `${article().brodtekst}\n\n– Vi har fått svært mange henvendelser fra innbyggere i hele fylket${attribution}`;
+      expect(of(checkArticle(article({ brodtekst: body }), sources, editorial), "sitat_ikke_i_kilde")).toEqual([]);
+    }
+  });
+
+  it("kontrollerer hele sitatet når det har et sitat i seg", () => {
+    const sources = [source("«Vi kaller det «krise» her», sier hydrologen.")];
+    const invented = checkArticle(
+      article({ ingress: "«Vi kaller det «krise» og vil evakuere hele Agder umiddelbart i natt», sier hydrologen." }),
+      sources,
+      editorial,
+    );
+    expect(of(invented, "sitat_ikke_i_kilde").map(([severity]) => severity)).toEqual(["blokkerer"]);
+    const verbatim = checkArticle(
+      article({ ingress: "«Vi kaller det «krise» her», sier hydrologen." }),
+      sources,
+      editorial,
+    );
+    expect(verbatim).toEqual([]);
+  });
+
+  it("godtar utelatelser og innskudd som ordrette, men ber redaktøren sjekke meningen", () => {
     const sources = [source(QUOTE_SOURCE)];
     for (const gap of ["[…]", "(…)", "…"]) {
       const findings = checkArticle(
@@ -244,14 +333,14 @@ describe("sitater", () => {
         sources,
         editorial,
       );
-      expect(findings).toEqual([]);
+      expect(findings.map((f) => [f.kind, f.severity])).toEqual([["sitat_forkortet", "middels"]]);
     }
     const insertion = checkArticle(
       article({ ingress: "«Vi er svært bekymret for situasjonen i de små vassdragene [i Agder]», sier NVE." }),
       sources,
       editorial,
     );
-    expect(insertion.map((f) => [f.kind, f.severity])).toEqual([["sitat_med_innskudd", "lav"]]);
+    expect(insertion.map((f) => [f.kind, f.severity])).toEqual([["sitat_med_innskudd", "middels"]]);
     // Delene må stå i samme rekkefølge som i kilden.
     const reordered = checkArticle(
       article({ ingress: "«Vi ber folk om å holde seg unna elvebredden […] vi er svært bekymret», sier NVE." }),
@@ -431,6 +520,24 @@ describe("kopiert tekst", () => {
   });
 });
 
+describe("kopiert tittel i flere kilder", () => {
+  it("gir samme resultat uansett rekkefølgen på kildene", () => {
+    const title =
+      "Endringer i lov om barnehager for å redusere maksimalprisen for foreldrebetaling i barnehager fra høsten";
+    const k1 = source("Proposisjonen er lagt fram.", "K1", { title });
+    const k2 = source(`Stortinget har fått saken «${title}» til behandling.`, "K2", { title: "Ny sak i Stortinget" });
+    const ingress = `Stortinget behandler ${title}.`;
+    for (const sources of [
+      [k1, k2],
+      [k2, k1],
+    ]) {
+      expect(of(checkArticle(article({ ingress }), sources, editorial), "kopiert_tekst").map(([sev]) => sev)).toEqual([
+        "høy",
+      ]);
+    }
+  });
+});
+
 describe("personer og kilder", () => {
   it("stopper ukjente kilder og navngitte privatpersoner", () => {
     const findings = checkArticle(
@@ -448,6 +555,37 @@ describe("personer og kilder", () => {
     ]);
   });
 
+  it("stopper en privatperson som navngis i genitiv, med bare etternavn eller med tillegg i navnet", () => {
+    const sources = [source("Kari Nilsen måtte forlate huset i Vennesla.")];
+    for (const [ingress, navn] of [
+      ["Kari Nilsens hus i Vennesla ble tatt av flommen.", "Kari Nilsen"],
+      ["Nilsen måtte forlate huset sitt.", "Kari Nilsen"],
+      ["Kari Nilsen måtte forlate huset.", "Kari Nilsen, Vennesla"],
+    ]) {
+      const findings = checkArticle(
+        article({
+          ingress,
+          personer: [{ navn, rolle: "privatperson", omtale: "påstand_om_personen", kilder: ["K1"] }],
+        }),
+        sources,
+        editorial,
+      );
+      expect(of(findings, "privatperson")).toEqual([["blokkerer", navn]]);
+    }
+  });
+
+  it("regner ikke en beskrivelse med stor forbokstav som et navn", () => {
+    const findings = checkArticle(
+      article({
+        ingress: "En mann i 40-årene er evakuert.",
+        personer: [{ navn: "Mann i 40-årene", rolle: "privatperson", omtale: "påstand_om_personen", kilder: ["K1"] }],
+      }),
+      [source("En mann i 40-årene er evakuert.")],
+      editorial,
+    );
+    expect(findings.map((f) => [f.kind, f.severity])).toEqual([["privatperson_omtalt", "middels"]]);
+  });
+
   it("blokkerer ikke en privatperson som er omtalt uten navn, men ber redaktøren sjekke", () => {
     const findings = checkArticle(
       article({
@@ -458,6 +596,13 @@ describe("personer og kilder", () => {
       editorial,
     );
     expect(findings.map((f) => [f.kind, f.severity])).toEqual([["privatperson_omtalt", "middels"]]);
+  });
+
+  it("regner ikke vanlige navn på institusjoner og områder som personer", () => {
+    const ingress =
+      "Helse Sør-Øst, Nordre Follo og Indre Østfold samarbeider med Røde Kors og Norsk Folkehjelp. Oslo Børs falt.";
+    const findings = checkArticle(article({ ingress }), [source(ingress)], editorial);
+    expect(of(findings, "navn_utenfor_personlisten")).toEqual([]);
   });
 
   it("finner navn som ikke står i personlisten", () => {
@@ -494,6 +639,37 @@ describe("personer og kilder", () => {
       );
     // K2 nevner ikke personen, og K1 og K3 har samme utgiver.
     expect(check("påstand_om_personen", ["K1", "K2"])).toEqual([["middels", "Ola Hansen"]]);
+    // Et parti i parentes eller et vanlig ord som etternavn er ikke nok til at en kilde nevner personen.
+    const party = [
+      source("Hydrolog Ola Hansen har ledet arbeidet."),
+      source("Ap mener det.", "K2", { publisher: "Ap" }),
+    ];
+    const withParty = checkArticle(
+      article({
+        ingress: "Ola Hansen har ledet arbeidet.",
+        personer: [
+          { navn: "Ola Hansen (Ap)", rolle: "offentlig_person", omtale: "påstand_om_personen", kilder: ["K1", "K2"] },
+        ],
+      }),
+      party,
+      editorial,
+    );
+    expect(of(withParty, "personpåstand_med_for_få_kilder")).toHaveLength(1);
+    const sand = [
+      source("Ordfører Jon Sand har ledet arbeidet."),
+      source("Det er lagt sand og grus på veiene.", "K2", { publisher: "Statens vegvesen" }),
+    ];
+    const withSand = checkArticle(
+      article({
+        ingress: "Ordfører Jon Sand har ledet arbeidet.",
+        personer: [
+          { navn: "Jon Sand", rolle: "offentlig_person", omtale: "påstand_om_personen", kilder: ["K1", "K2"] },
+        ],
+      }),
+      sand,
+      editorial,
+    );
+    expect(of(withSand, "personpåstand_med_for_få_kilder")).toHaveLength(1);
     expect(check("påstand_om_personen", ["K1", "K3"])).toEqual([["middels", "Ola Hansen"]]);
     expect(check("påstand_om_personen", ["K1", "K4"])).toEqual([]);
     // Det personen sier i sin rolle, er ikke en påstand om personen.
@@ -551,5 +727,16 @@ describe("form", () => {
     ]);
     expect(findings).toEqual([expect.objectContaining({ kind: "kildehenvisning_i_teksten", severity: "lav" })]);
     expect(stripSourceRefs(article()).findings).toEqual([]);
+  });
+
+  it("fjerner også lister og intervaller, og merker nøkler som står igjen i teksten", () => {
+    const { article: cleaned } = stripSourceRefs(
+      article({ ingress: "Det ventes regn (K1 og K2). Flom [K1–K3]. Ras (kilde: K4). Vind [K1, K2 og K3]." }),
+    );
+    expect(cleaned.ingress).toBe("Det ventes regn. Flom. Ras. Vind.");
+    const { findings } = stripSourceRefs(article({ ingress: "Ifølge K2 er det fare for flom." }));
+    expect(findings).toEqual([
+      expect.objectContaining({ kind: "kildehenvisning_i_teksten", severity: "middels", excerpt: "K2" }),
+    ]);
   });
 });

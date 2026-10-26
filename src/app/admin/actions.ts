@@ -11,6 +11,7 @@ import {
   markClusteringAborted,
   moveItem,
 } from "@/lib/cluster/manual";
+import { pageNumber } from "@/lib/admin";
 import { siteConfig } from "@/lib/config";
 import {
   approveArticle,
@@ -80,7 +81,7 @@ export async function abortClustering(): Promise<void> {
 }
 
 /** Kjører en avgjørelse om en artikkel og går tilbake til godkjenningssiden med en kode for resultatet. */
-async function runReview(change: () => Promise<unknown>, success: string): Promise<never> {
+async function runReview(change: () => Promise<unknown>, success: string, formData: FormData): Promise<never> {
   let code = success;
   try {
     await change();
@@ -88,7 +89,17 @@ async function runReview(change: () => Promise<unknown>, success: string): Promi
     if (!(error instanceof ReviewError)) throw error;
     code = error.code;
   }
-  redirect(`/admin/godkjenning?melding=${code}`);
+  redirect(reviewUrl(code, formData));
+}
+
+/** Godkjenningssiden med en melding, på samme sider av listene som skjemaet ble sendt fra. */
+function reviewUrl(code: string, formData: FormData): string {
+  const params = new URLSearchParams({ melding: code });
+  for (const list of ["avvist", "publisert"]) {
+    const page = pageNumber(formData.get(list));
+    if (page > 1) params.set(list, String(page));
+  }
+  return `/admin/godkjenning?${params}`;
 }
 
 function readNote(formData: FormData): string {
@@ -101,7 +112,7 @@ export async function approveArticleAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const articleId = readId(formData, "articleId");
   if (!articleId) redirect("/admin/godkjenning?melding=ugyldig");
-  await runReview(() => approveArticle(getDb(), articleId), "publisert");
+  await runReview(() => approveArticle(getDb(), articleId), "publisert", formData);
 }
 
 /** «Avvis» med begrunnelse. */
@@ -109,7 +120,7 @@ export async function rejectArticleAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const articleId = readId(formData, "articleId");
   if (!articleId) redirect("/admin/godkjenning?melding=ugyldig");
-  await runReview(() => rejectArticle(getDb(), articleId, readNote(formData)), "avvist");
+  await runReview(() => rejectArticle(getDb(), articleId, readNote(formData)), "avvist", formData);
 }
 
 /** «Skriv på nytt»: sletter et utkast som aldri er publisert. */
@@ -117,7 +128,7 @@ export async function regenerateArticleAction(formData: FormData): Promise<void>
   await requireAdmin();
   const articleId = readId(formData, "articleId");
   if (!articleId) redirect("/admin/godkjenning?melding=ugyldig");
-  await runReview(() => regenerateArticle(getDb(), articleId, { config: siteConfig }), "skrives-paa-nytt");
+  await runReview(() => regenerateArticle(getDb(), articleId, { config: siteConfig }), "skrives-paa-nytt", formData);
 }
 
 /** «Prøv igjen» for en sak der skrivingen har feilet. */
@@ -125,7 +136,7 @@ export async function retryStoryAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const storyId = readId(formData, "storyId");
   if (!storyId) redirect("/admin/godkjenning?melding=ugyldig");
-  await runReview(() => retryStory(getDb(), storyId, { config: siteConfig }), "proves-igjen");
+  await runReview(() => retryStory(getDb(), storyId, { config: siteConfig }), "proves-igjen", formData);
 }
 
 /** «Avpubliser» med begrunnelse. */
@@ -133,5 +144,5 @@ export async function unpublishArticleAction(formData: FormData): Promise<void> 
   await requireAdmin();
   const articleId = readId(formData, "articleId");
   if (!articleId) redirect("/admin/godkjenning?melding=ugyldig");
-  await runReview(() => unpublishArticle(getDb(), articleId, readNote(formData)), "avpublisert");
+  await runReview(() => unpublishArticle(getDb(), articleId, readNote(formData)), "avpublisert", formData);
 }

@@ -201,8 +201,16 @@ export async function getReviewQueue({ rejectedPage = 1, publishedPage = 1 } = {
   await requireAdmin();
   await connection();
   const db = getDb();
+  const [rejectedCount, publishedCount] = await Promise.all([
+    db.article.count({ where: { status: "DRAFT" } }),
+    db.article.count({ where: { status: "PUBLISHED" } }),
+  ]);
+  // Et sidetall etter siste side gir siste side, så redaktøren ikke havner på en tom side.
+  const lastPage = (total: number) => Math.max(1, Math.ceil(total / REVIEW_PAGE_SIZE));
+  rejectedPage = Math.min(rejectedPage, lastPage(rejectedCount));
+  publishedPage = Math.min(publishedPage, lastPage(publishedCount));
   const page = (n: number) => ({ skip: (n - 1) * REVIEW_PAGE_SIZE, take: REVIEW_PAGE_SIZE + 1 });
-  const [pending, rejected, published, rejectedCount, publishedCount] = await Promise.all([
+  const [pending, rejected, published] = await Promise.all([
     db.article.findMany({
       where: { status: "PENDING_REVIEW" },
       orderBy: { createdAt: "asc" },
@@ -220,8 +228,6 @@ export async function getReviewQueue({ rejectedPage = 1, publishedPage = 1 } = {
       ...page(publishedPage),
       select: reviewArticleSelect,
     }),
-    db.article.count({ where: { status: "DRAFT" } }),
-    db.article.count({ where: { status: "PUBLISHED" } }),
   ]);
   const failed = await db.story.findMany({
     where: { article: null, lastGenerationError: { not: null } },

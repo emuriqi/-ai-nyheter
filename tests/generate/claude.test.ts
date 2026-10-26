@@ -1,4 +1,6 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isFatalClaudeError, isTransientClaudeError } from "@/lib/ai/claude";
 import { loadPrompt } from "@/lib/ai/prompts";
 import { parseSiteConfig } from "@/lib/config/schema";
 import { createClaudeModerator, createClaudeWriter, formatArticle } from "@/lib/generate/claude";
@@ -212,5 +214,48 @@ describe("Claude som moderator", () => {
     });
     const refusal = createClaudeModerator(fakeAnthropic(() => jsonResponse({}, "refusal")).client, "m", editorial);
     expect(await refusal.moderate(sak.sources, sak.good, NOW)).toMatchObject({ ok: false, stopRun: false });
+  });
+});
+
+describe("feil fra Claude API", () => {
+  const apiError = (status: number) => Anthropic.APIError.generate(status, { type: "error" }, "feil", new Headers());
+
+  it("regner feil i nøkkel, konto og oppsett som fatale", () => {
+    for (const status of [400, 401, 402, 403, 404, 413]) {
+      expect([status, isFatalClaudeError(apiError(status)), isTransientClaudeError(apiError(status))]).toEqual([
+        status,
+        true,
+        false,
+      ]);
+    }
+  });
+
+  it("regner overbelastning, for mange kall og nettverksfeil som forbigående", () => {
+    for (const status of [408, 409, 429, 500, 502, 503, 529]) {
+      expect([status, isTransientClaudeError(apiError(status)), isFatalClaudeError(apiError(status))]).toEqual([
+        status,
+        true,
+        false,
+      ]);
+    }
+    expect(isTransientClaudeError(new Anthropic.APIConnectionError({ message: "nede" }))).toBe(true);
+  });
+
+  it("teller tidsavbrudd mot saken, siden et langt svar kan være årsaken", () => {
+    for (const error of [new Anthropic.APIConnectionTimeoutError(), apiError(504)]) {
+      expect([isTransientClaudeError(error), isFatalClaudeError(error)]).toEqual([false, false]);
+    }
+  });
+
+  it.each([
+    [402, "APIError"],
+    [400, "BadRequestError"],
+  ])("stopper kjøringen og skriver ikke mer etter %i", async (status, name) => {
+    const { client, requests } = fakeAnthropic(() => errorResponse(status));
+    const writer = createClaudeWriter(client, "m", editorial);
+    const expected = { ok: false, reason: `Skriving feilet: ${name} (${status})`, stopRun: true };
+    expect(await writer.write(sak.sources, NOW)).toEqual(expected);
+    expect(await writer.write(sak.sources, NOW)).toEqual(expected);
+    expect(requests).toHaveLength(1);
   });
 });

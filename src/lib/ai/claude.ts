@@ -36,25 +36,31 @@ export function describeClaudeError(error: unknown): string {
 }
 
 /**
- * Feil der det ikke hjelper å prøve igjen i samme kjøring: feil nøkkel,
- * manglende tilgang eller en modell som ikke finnes.
+ * Feil som gjelder nøkkelen, kontoen eller oppsettet, ikke den enkelte
+ * forespørselen, så det hjelper ikke å prøve igjen i samme kjøring: ugyldig
+ * forespørsel (for eksempel en beta organisasjonen ikke har, eller nådd
+ * forbruksgrense), feil nøkkel, brukt opp kreditt, manglende tilgang, en modell
+ * som ikke finnes, og for stor forespørsel. Forespørslene bygges av koden og
+ * kildeteksten er begrenset, så slike feil rammer alle saker likt.
  */
 export function isFatalClaudeError(error: unknown): boolean {
-  return (
-    error instanceof Anthropic.AuthenticationError ||
-    error instanceof Anthropic.PermissionDeniedError ||
-    error instanceof Anthropic.NotFoundError
-  );
+  if (!(error instanceof Anthropic.APIError) || error instanceof Anthropic.APIConnectionError) return false;
+  return [400, 401, 402, 403, 404, 413].includes(error.status ?? 0);
 }
 
 /**
- * Forbigående feil hos API-et eller i nettverket: for mange kall, overbelastning,
- * serverfeil og tidsavbrudd. De sier ingenting om selve forespørselen.
+ * Forbigående feil hos API-et eller i nettverket: tidsavbrudd i køen (408),
+ * konflikt (409), for mange kall (429), serverfeil og overbelastning (5xx) og
+ * tilkoblingsfeil. De sier ingenting om selve forespørselen.
+ *
+ * Unntak: at svaret ikke kom innen tidsgrensen (hos oss eller hos API-et, 504),
+ * kan skyldes forespørselen selv (et langt svar), og regnes derfor ikke som
+ * forbigående. Det telles som et forsøk for saken.
  */
 export function isTransientClaudeError(error: unknown): boolean {
-  return (
-    error instanceof Anthropic.RateLimitError ||
-    error instanceof Anthropic.InternalServerError ||
-    error instanceof Anthropic.APIConnectionError
-  );
+  if (error instanceof Anthropic.APIConnectionTimeoutError) return false;
+  if (error instanceof Anthropic.APIConnectionError) return true;
+  if (!(error instanceof Anthropic.APIError)) return false;
+  const status = error.status ?? 0;
+  return status === 408 || status === 409 || status === 429 || (status >= 500 && status !== 504);
 }

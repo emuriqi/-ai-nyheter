@@ -11,8 +11,8 @@ export async function generateMetadata({ params }: PageProps<"/sak/[slug]">): Pr
   return {
     title: article.title,
     description: article.lede,
-    // Maskinlesbar merking av at teksten er laget av kunstig intelligens (AI-forordningen art. 50).
-    other: { "ai-generated": "true", "ai-model": article.model },
+    // Hvilken modell som skrev teksten. Selve AI-merkingen (ai-generated) står i layout.tsx, så den alltid er i <head>.
+    other: { "ai-model": article.model },
   };
 }
 
